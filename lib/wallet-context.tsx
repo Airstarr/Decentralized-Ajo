@@ -1,7 +1,6 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import StellarSdk from 'stellar-sdk';
 import { STELLAR_CONFIG, isValidStellarAddress } from './stellar-config';
 
 interface WalletContextType {

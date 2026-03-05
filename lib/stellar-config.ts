@@ -1,4 +1,4 @@
-import StellarSdk from 'stellar-sdk';
+import * as StellarSdk from '@stellar/js-stellar-sdk';
 
 export const STELLAR_CONFIG = {
   // Network configuration
@@ -23,7 +23,7 @@ export const getStellarServer = () => {
 
 // Initialize Soroban RPC client
 export const getSorobanClient = () => {
-  return new StellarSdk.SorobanRpc.Server(STELLAR_CONFIG.sorobanRpcUrl);
+  return new (StellarSdk as any).SorobanRpc.Server(STELLAR_CONFIG.sorobanRpcUrl);
 };
 
 // Get network configuration
