@@ -65,7 +65,7 @@ export default function CircleDetailPage() {
 
   const [circle, setCircle] = useState<Circle | null>(null);
   const [loading, setLoading] = useState(true);
-  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [currentUser, setCurrentUser] = useState<{ id: string } | null>(null);
   const [contributionAmount, setContributionAmount] = useState('');
   const [submittingContribution, setSubmittingContribution] = useState(false);
 
