@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken, extractToken } from '@/lib/auth';
 import { CircleStatus } from '@prisma/client';
+import { applyRateLimit, validateBody } from '@/lib/api-helpers';
+import { RATE_LIMITS } from '@/lib/rate-limit';
+import { CreateCircleSchema, CreateCircleInput } from '@/lib/validations/circle';
 
 export async function POST(request: NextRequest) {
   const token = extractToken(request.headers.get('authorization'));
@@ -47,14 +50,19 @@ export async function POST(request: NextRequest) {
 // GET - List circles with pagination and optional status filter
 export async function GET(request: NextRequest) {
   const token = extractToken(request.headers.get('authorization'));
-  if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!token) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
 
-    if (!token) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+  const payload = verifyToken(token);
+  if (!payload) {
+    return NextResponse.json({ error: 'Invalid or expired token' }, { status: 401 });
+  }
 
   const rateLimited = applyRateLimit(request, RATE_LIMITS.api, 'circles:list', payload.userId);
   if (rateLimited) return rateLimited;
+
+  try {
 
     // Parse and validate query params
     const { searchParams } = request.nextUrl;
