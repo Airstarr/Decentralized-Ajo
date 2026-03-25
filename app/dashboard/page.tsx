@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
@@ -10,6 +10,17 @@ import { PlusCircle, Search } from 'lucide-react';
 import { authenticatedFetch } from '@/lib/auth-client';
 import { DashboardStats } from '@/components/dashboard/dashboard-stats';
 import { CircleList } from '@/components/dashboard/circle-list';
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from '@/components/ui/pagination';
+
+const PAGE_SIZE = 9;
 
 interface Circle {
   id: string;
@@ -25,10 +36,14 @@ export default function DashboardPage() {
   const [circles, setCircles] = useState<Circle[]>([]);
   const [loading, setLoading] = useState(true);
   const [userName, setUserName] = useState('');
-  
+
   // Search and Filtering State
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -42,16 +57,23 @@ export default function DashboardPage() {
       const userData = JSON.parse(user);
       setUserName(userData.firstName || userData.email);
     }
-
-    fetchCircles();
   }, [router]);
 
-  const fetchCircles = async () => {
+  const fetchCircles = useCallback(async () => {
+    setLoading(true);
     try {
-      const response = await authenticatedFetch('/api/circles');
+      const params = new URLSearchParams({
+        page: String(currentPage),
+        limit: String(PAGE_SIZE),
+      });
+      if (statusFilter !== 'ALL') params.set('status', statusFilter);
+      if (searchQuery.trim()) params.set('search', searchQuery.trim());
+
+      const response = await authenticatedFetch(`/api/circles?${params}`);
       if (response.ok) {
         const data = await response.json();
         setCircles(data.data || []);
+        setTotalPages(data.meta?.pages ?? 1);
       } else if (response.status === 401) {
         router.push('/auth/login');
       }
@@ -60,15 +82,38 @@ export default function DashboardPage() {
     } finally {
       setLoading(false);
     }
+  }, [currentPage, statusFilter, searchQuery, router]);
+
+  // Debounce search: reset page then re-fetch after 300ms idle
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery]);
+
+  useEffect(() => {
+    const timer = setTimeout(fetchCircles, searchQuery ? 300 : 0);
+    return () => clearTimeout(timer);
+  }, [fetchCircles, searchQuery]);
+
+  // Reset to page 1 when filter changes
+  const handleStatusChange = (value: string) => {
+    setStatusFilter(value);
+    setCurrentPage(1);
   };
 
-  // Filter circles based on search and status
-  const filteredCircles = circles.filter((circle) => {
-    const matchesSearch = circle.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         circle.description?.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesStatus = statusFilter === 'ALL' || circle.status.toUpperCase() === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
+  const filteredCircles = circles;
+
+  // Build visible page numbers with ellipsis
+  const getPageNumbers = () => {
+    if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
+    const pages: (number | 'ellipsis')[] = [1];
+    if (currentPage > 3) pages.push('ellipsis');
+    for (let i = Math.max(2, currentPage - 1); i <= Math.min(totalPages - 1, currentPage + 1); i++) {
+      pages.push(i);
+    }
+    if (currentPage < totalPages - 2) pages.push('ellipsis');
+    pages.push(totalPages);
+    return pages;
+  };
 
   return (
     <main className="min-h-screen bg-background">
@@ -113,7 +158,7 @@ export default function DashboardPage() {
                 />
               </div>
               
-              <Tabs value={statusFilter} onValueChange={setStatusFilter} className="w-full sm:w-auto">
+              <Tabs value={statusFilter} onValueChange={handleStatusChange} className="w-full sm:w-auto">
                 <TabsList className="bg-card border border-border/50">
                   <TabsTrigger value="ALL">All</TabsTrigger>
                   <TabsTrigger value="ACTIVE">Active</TabsTrigger>
@@ -125,6 +170,49 @@ export default function DashboardPage() {
           </div>
 
           <CircleList circles={filteredCircles} loading={loading} />
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <Pagination>
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious
+                    href="#"
+                    onClick={(e) => { e.preventDefault(); if (currentPage > 1) setCurrentPage((p) => p - 1); }}
+                    aria-disabled={currentPage === 1}
+                    className={currentPage === 1 ? 'pointer-events-none opacity-50' : ''}
+                  />
+                </PaginationItem>
+
+                {getPageNumbers().map((page, idx) =>
+                  page === 'ellipsis' ? (
+                    <PaginationItem key={`ellipsis-${idx}`}>
+                      <PaginationEllipsis />
+                    </PaginationItem>
+                  ) : (
+                    <PaginationItem key={page}>
+                      <PaginationLink
+                        href="#"
+                        isActive={page === currentPage}
+                        onClick={(e) => { e.preventDefault(); setCurrentPage(page); }}
+                      >
+                        {page}
+                      </PaginationLink>
+                    </PaginationItem>
+                  )
+                )}
+
+                <PaginationItem>
+                  <PaginationNext
+                    href="#"
+                    onClick={(e) => { e.preventDefault(); if (currentPage < totalPages) setCurrentPage((p) => p + 1); }}
+                    aria-disabled={currentPage === totalPages}
+                    className={currentPage === totalPages ? 'pointer-events-none opacity-50' : ''}
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
+          )}
         </div>
       </div>
     </main>

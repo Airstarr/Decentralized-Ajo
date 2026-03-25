@@ -79,6 +79,7 @@ export async function GET(request: NextRequest) {
     }
 
     const skip = (page - 1) * limit;
+    const search = searchParams.get('search')?.trim();
 
     // Base where clause — user's circles as member or organizer
     const where = {
@@ -86,8 +87,15 @@ export async function GET(request: NextRequest) {
         { organizerId: payload.userId },
         { members: { some: { userId: payload.userId } } },
       ],
-      // Conditionally add status filter
       ...(statusParam ? { status: statusParam as CircleStatus } : {}),
+      ...(search
+        ? {
+            OR: [
+              { name: { contains: search, mode: 'insensitive' as const } },
+              { description: { contains: search, mode: 'insensitive' as const } },
+            ],
+          }
+        : {}),
     };
 
     // Run count and findMany in parallel
