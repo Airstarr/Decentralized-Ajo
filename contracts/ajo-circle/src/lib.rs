@@ -103,6 +103,8 @@ pub enum DataKey {
     LastDepositAt,
     /// Running total of tokens received via `deposit` (on-chain accounting)
     TotalPool,
+    /// Tracks withdrawals per cycle: Map<cycle_number, Map<member_address, withdrawn>>
+    CycleWithdrawals,
 }
 
 #[contract]
@@ -645,11 +647,12 @@ impl AjoCircle {
         Ok(())
     }
 
-    /// Claim payout when it's a member's turn
-    pub fn claim_payout(env: Env, member: Address) -> Result<i128, AjoError> {
+    /// Withdraw collected pool for the designated winner of a specific cycle
+    /// Implements comprehensive checks: cycle maturity, full funding, and reentrancy protection
+    pub fn withdraw(env: Env, member: Address, cycle: u32) -> Result<i128, AjoError> {
         member.require_auth();
 
-        // Block payouts during panic
+        // Block withdrawals during panic
         if Self::get_circle_status(env.clone()) == CircleStatus::Panicked {
             return Err(AjoError::CirclePanicked);
         }
@@ -660,6 +663,12 @@ impl AjoCircle {
             .get(&DataKey::Circle)
             .ok_or(AjoError::NotFound)?;
 
+        // Validate cycle is within valid range
+        if cycle == 0 || cycle > circle.max_rounds {
+            return Err(AjoError::InvalidInput);
+        }
+
+        // Check member standing
         let standings: Map<Address, MemberStanding> = env.storage()
             .instance()
             .get(&DataKey::Standings)
@@ -671,46 +680,141 @@ impl AjoCircle {
             }
         }
 
+        // Verify cycle has matured (time check)
+        let current_time = env.ledger().timestamp();
+        let cycle_deadline = Self::get_cycle_deadline(&env, cycle)?;
+        
+        if current_time < cycle_deadline {
+            return Err(AjoError::InvalidInput); // Cycle not yet mature
+        }
+
+        // Verify pool is fully funded for this cycle
+        let required_pool = (circle.member_count as i128) * circle.contribution_amount;
+        if !Self::is_cycle_fully_funded(&env, cycle, required_pool)? {
+            return Err(AjoError::InsufficientFunds);
+        }
+
+        // Enforce rotation order - verify member is designated recipient for this cycle
+        if let Some(rotation) = env.storage()
+            .instance()
+            .get::<DataKey, Vec<Address>>(&DataKey::RotationOrder)
+        {
+            let idx = (cycle - 1) as u32;
+            let expected = rotation.get(idx).ok_or(AjoError::InvalidInput)?;
+            if expected != member {
+                return Err(AjoError::Unauthorized);
+            }
+        } else {
+            return Err(AjoError::InvalidInput); // Rotation not set
+        }
+
+        // Check if already withdrawn for this cycle
+        let mut cycle_withdrawals: Map<u32, Map<Address, bool>> = env
+            .storage()
+            .instance()
+            .get(&DataKey::CycleWithdrawals)
+            .unwrap_or(Map::new(&env));
+
+        let mut cycle_map = cycle_withdrawals
+            .get(cycle)
+            .unwrap_or(Map::new(&env));
+
+        if cycle_map.get(member.clone()).unwrap_or(false) {
+            return Err(AjoError::AlreadyPaid);
+        }
+
+        // Calculate payout
+        let payout = required_pool;
+
+        // Reentrancy protection: Mark as withdrawn BEFORE transfer
+        cycle_map.set(member.clone(), true);
+        cycle_withdrawals.set(cycle, cycle_map);
+        env.storage().instance().set(&DataKey::CycleWithdrawals, &cycle_withdrawals);
+
+        // Update member data
         let mut members: Map<Address, MemberData> = env
             .storage()
             .instance()
             .get(&DataKey::Members)
             .ok_or(AjoError::NotFound)?;
 
-        // Enforce rotation order if a shuffle has been committed
-        if let Some(rotation) = env.storage()
-            .instance()
-            .get::<DataKey, Vec<Address>>(&DataKey::RotationOrder)
-        {
-            // Current round is 1-based; index into rotation is (current_round - 1)
-            let idx = (circle.current_round - 1) as u32;
-            let expected = rotation.get(idx).ok_or(AjoError::InvalidInput)?;
-            if expected != member {
-                return Err(AjoError::Unauthorized);
-            }
-        }
-
         if let Some(mut member_data) = members.get(member.clone()) {
-            if member_data.has_received_payout {
-                return Err(AjoError::AlreadyPaid);
-            }
-
-            let payout = (circle.member_count as i128) * circle.contribution_amount;
-
-            // Transfer payout from contract to member
-            let token_client = token::Client::new(&env, &circle.token_address);
-            token_client.transfer(&env.current_contract_address(), &member, &payout);
-
             member_data.has_received_payout = true;
             member_data.total_withdrawn += payout;
-
-            members.set(member, member_data);
+            members.set(member.clone(), member_data);
             env.storage().instance().set(&DataKey::Members, &members);
-
-            Ok(payout)
         } else {
-            Err(AjoError::NotFound)
+            return Err(AjoError::NotFound);
         }
+
+        // Safe transfer: Execute AFTER state updates (reentrancy protection)
+        let token_client = token::Client::new(&env, &circle.token_address);
+        token_client.transfer(&env.current_contract_address(), &member, &payout);
+
+        Ok(payout)
+    }
+
+    /// Helper: Calculate deadline for a specific cycle
+    fn get_cycle_deadline(env: &Env, cycle: u32) -> Result<u64, AjoError> {
+        let circle: CircleData = env
+            .storage()
+            .instance()
+            .get(&DataKey::Circle)
+            .ok_or(AjoError::NotFound)?;
+
+        let initial_deadline: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::RoundDeadline)
+            .unwrap_or(0);
+
+        // Calculate deadline for the requested cycle
+        let cycles_elapsed = if cycle > circle.current_round {
+            cycle - circle.current_round
+        } else {
+            0
+        };
+
+        let deadline = initial_deadline + (cycles_elapsed as u64) * (circle.frequency_days as u64) * 86_400;
+        Ok(deadline)
+    }
+
+    /// Helper: Check if cycle is fully funded
+    fn is_cycle_fully_funded(env: &Env, cycle: u32, required_amount: i128) -> Result<bool, AjoError> {
+        let members: Map<Address, MemberData> = env
+            .storage()
+            .instance()
+            .get(&DataKey::Members)
+            .ok_or(AjoError::NotFound)?;
+
+        let circle: CircleData = env
+            .storage()
+            .instance()
+            .get(&DataKey::Circle)
+            .ok_or(AjoError::NotFound)?;
+
+        let target_per_member = (cycle as i128) * circle.contribution_amount;
+        
+        let mut funded_count = 0_u32;
+        for (_, member_data) in members.iter() {
+            if member_data.total_contributed >= target_per_member {
+                funded_count += 1;
+            }
+        }
+
+        Ok(funded_count >= circle.member_count)
+    }
+
+    /// Legacy claim_payout function - now wraps withdraw() for backward compatibility
+    pub fn claim_payout(env: Env, member: Address) -> Result<i128, AjoError> {
+        let circle: CircleData = env
+            .storage()
+            .instance()
+            .get(&DataKey::Circle)
+            .ok_or(AjoError::NotFound)?;
+
+        // Use current round as the cycle
+        Self::withdraw(env, member, circle.current_round)
     }
 
     /// Perform a partial withdrawal with penalty
@@ -1308,4 +1412,136 @@ mod tests {
         assert_eq!(client.get_total_pool(), 100_i128);
         assert!(client.get_last_deposit_timestamp(&member).is_ok());
     }
+
+    // ── Withdrawal Function Tests ────────────────────────────────────────────
+
+    #[test]
+    fn test_withdraw_happy_path() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, organizer, member, token_address) = setup_circle_with_member(&env);
+        let token_client = token::Client::new(&env, &token_address);
+
+        // Shuffle rotation to establish payout order
+        client.shuffle_rotation(&organizer);
+
+        // Both members have contributed 200, which covers 2 rounds at 100 each
+        // Member balance: 800 (1000 - 200 contributed)
+        assert_eq!(token_client.balance(&member), 800_i128);
+
+        // Withdraw for cycle 1 (current round)
+        let payout = client.withdraw(&member, &1_u32);
+        
+        // Payout should be member_count (2) * contribution_amount (100) = 200
+        assert_eq!(payout, Ok(200_i128));
+        
+        // Member balance should now be 1000 (800 + 200)
+        assert_eq!(token_client.balance(&member), 1000_i128);
+    }
+
+    #[test]
+    fn test_withdraw_prevents_double_withdrawal() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, organizer, member, _token) = setup_circle_with_member(&env);
+
+        client.shuffle_rotation(&organizer);
+
+        // First withdrawal succeeds
+        let first = client.withdraw(&member, &1_u32);
+        assert_eq!(first, Ok(200_i128));
+
+        // Second withdrawal for same cycle fails
+        let second = client.withdraw(&member, &1_u32);
+        assert_eq!(second, Err(AjoError::AlreadyPaid));
+    }
+
+    #[test]
+    fn test_withdraw_enforces_rotation_order() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, organizer, member, _token) = setup_circle_with_member(&env);
+
+        client.shuffle_rotation(&organizer);
+
+        // Try to withdraw for cycle 2 (wrong turn)
+        let result = client.withdraw(&member, &2_u32);
+        assert_eq!(result, Err(AjoError::Unauthorized));
+    }
+
+    #[test]
+    fn test_withdraw_requires_rotation_set() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, _organizer, member, _token) = setup_circle_with_member(&env);
+
+        // Don't shuffle rotation - should fail
+        let result = client.withdraw(&member, &1_u32);
+        assert_eq!(result, Err(AjoError::InvalidInput));
+    }
+
+    #[test]
+    fn test_withdraw_validates_cycle_range() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, organizer, member, _token) = setup_circle_with_member(&env);
+
+        client.shuffle_rotation(&organizer);
+
+        // Cycle 0 is invalid
+        let zero = client.withdraw(&member, &0_u32);
+        assert_eq!(zero, Err(AjoError::InvalidInput));
+
+        // Cycle beyond max_rounds (12) is invalid
+        let beyond = client.withdraw(&member, &13_u32);
+        assert_eq!(beyond, Err(AjoError::InvalidInput));
+    }
+
+    #[test]
+    fn test_withdraw_blocks_during_panic() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, organizer, member, _token) = setup_circle_with_member(&env);
+
+        client.shuffle_rotation(&organizer);
+        client.panic(&organizer);
+
+        let result = client.withdraw(&member, &1_u32);
+        assert_eq!(result, Err(AjoError::CirclePanicked));
+    }
+
+    #[test]
+    fn test_withdraw_checks_member_standing() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, organizer, member, _token) = setup_circle_with_member(&env);
+
+        client.shuffle_rotation(&organizer);
+
+        // Boot member (mark as inactive)
+        client.boot_dormant_member(&organizer, &member);
+
+        let result = client.withdraw(&member, &1_u32);
+        assert_eq!(result, Err(AjoError::Disqualified));
+    }
+
+    #[test]
+    fn test_claim_payout_wraps_withdraw() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, organizer, member, token_address) = setup_circle_with_member(&env);
+        let token_client = token::Client::new(&env, &token_address);
+
+        client.shuffle_rotation(&organizer);
+
+        // claim_payout should work as before (backward compatibility)
+        let payout = client.claim_payout(&member);
+        assert_eq!(payout, Ok(200_i128));
+        assert_eq!(token_client.balance(&member), 1000_i128);
+
+        // Second claim should fail
+        let second = client.claim_payout(&member);
+        assert_eq!(second, Err(AjoError::AlreadyPaid));
+    }
 }
+
