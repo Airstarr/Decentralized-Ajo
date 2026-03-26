@@ -8,3 +8,17 @@ node_modules/
 .next/
 .env*.local
 .DS_Store
+
+# Server build output
+server/dist/
+*.log
+
+# Rust ignores
+target/
+**/*.rs.bk
+Cargo.lock
+
+.agents/
+.claude/
+issue.md
+skills-lock.json
