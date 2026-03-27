@@ -3,6 +3,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import logger from './config/logger';
 import { requestLogger } from './middleware/requestLogger';
+import { startAjoCycleCronJob } from './services/ajo-cycle-cron';
 
 const app = express();
 
@@ -84,6 +85,7 @@ app.listen(PORT, () => {
   logger.info(`Express server active on port :${PORT}`);
   logger.info(`Environment: ${process.env.NODE_ENV || 'development'}`);
   logger.info(`Log level: ${logger.level}`);
+  startAjoCycleCronJob();
 });
 
 export default app;

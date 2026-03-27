@@ -76,6 +76,7 @@ model Circle {
   contractDeployed Boolean @default(false)
   
   // Metadata
+  expectedEndDate DateTime?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -97,6 +98,7 @@ enum CircleStatus {
   ACTIVE
   COMPLETED
   CANCELLED
+  ACTION_REQUIRED
 }
 
 model CircleMember {
