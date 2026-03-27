@@ -9,9 +9,36 @@ const app = express();
 // Security middleware
 app.use(helmet());
 
-// CORS configuration
+const allowedOrigins = [
+  'http://localhost:3000',
+  /\\.vercel\\.app$/,
+  /\\.netlify\\.app$/
+];
+
 app.use(cors({
-  origin: process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:3000'],
+  origin: (origin, callback) => {
+    // Allow requests with no origin (e.g., mobile apps, curl)
+    if (!origin) return callback(null, true);
+    
+    // Check dynamic and static allowed origins
+    for (const allowed of allowedOrigins) {
+      if (typeof allowed === 'string' && origin === allowed) {
+        return callback(null, true);
+      }
+      if (allowed instanceof RegExp && allowed.test(origin)) {
+        return callback(null, true);
+      }
+    }
+
+    // Fallback to explicit env origins
+    if (process.env.ALLOWED_ORIGINS?.split(',').includes(origin)) {
+      return callback(null, true);
+    }
+
+    callback(new Error('Not allowed by CORS'));
+  },
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true,
 }));
 
