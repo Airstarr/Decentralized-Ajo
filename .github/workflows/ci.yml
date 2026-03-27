@@ -61,6 +61,9 @@ jobs:
       - name: Prisma Generate
         run: pnpm prisma generate
 
+      - name: Run frontend unit tests
+        run: pnpm test:unit
+
       - name: Next.js build
         env:
           DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/ci

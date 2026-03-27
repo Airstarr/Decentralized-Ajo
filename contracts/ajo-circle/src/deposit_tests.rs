@@ -1,7 +1,7 @@
 #![cfg(test)]
 
 //! Comprehensive test suite for the deposit() function
-//! 
+//!
 //! This module provides 100% code coverage for deposit logic including:
 //! - Passing states (exact amounts, valid conditions)
 //! - Failing states (reverts on missing funds, wrong amounts, invalid states)
@@ -30,7 +30,14 @@ fn setup_basic_circle(env: &Env) -> (AjoCircleClient, Address, Address, Address)
     token_admin.mint(&organizer, &10000_i128);
 
     // Initialize circle with 100 token contribution, 7 day frequency, 12 rounds, 5 max members
-    client.initialize_circle(&organizer, &token_address, &100_i128, &7_u32, &12_u32, &5_u32);
+    client.initialize_circle(
+        &organizer,
+        &token_address,
+        &100_i128,
+        &7_u32,
+        &12_u32,
+        &5_u32,
+    );
 
     (client, organizer, token_address, admin)
 }
@@ -154,7 +161,7 @@ fn test_deposit_resets_missed_count() {
     // This test verifies the logic exists but may need adjustment based on
     // actual Soroban test capabilities. The missed_count reset logic is
     // covered by the deposit function's internal logic.
-    
+
     // Perform deposit (which internally resets missed_count)
     let result = client.deposit(&organizer);
     assert_eq!(result, Ok(()));
@@ -184,15 +191,24 @@ fn test_deposit_from_multiple_members() {
 
     // Verify individual contributions
     assert_eq!(
-        client.get_member_balance(&organizer).unwrap().total_contributed,
+        client
+            .get_member_balance(&organizer)
+            .unwrap()
+            .total_contributed,
         100_i128
     );
     assert_eq!(
-        client.get_member_balance(&member1).unwrap().total_contributed,
+        client
+            .get_member_balance(&member1)
+            .unwrap()
+            .total_contributed,
         100_i128
     );
     assert_eq!(
-        client.get_member_balance(&member2).unwrap().total_contributed,
+        client
+            .get_member_balance(&member2)
+            .unwrap()
+            .total_contributed,
         100_i128
     );
 }
@@ -230,6 +246,48 @@ fn test_deposit_fails_when_panicked() {
 
     // Verify pool unchanged
     assert_eq!(client.get_total_pool(), 0_i128);
+}
+
+#[test]
+fn test_pause_blocks_withdrawal() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, organizer, _token_address, _admin) = setup_basic_circle(&env);
+
+    // Deposit once so payout is available
+    client.deposit(&organizer);
+
+    // Pause contract
+    client.panic(&organizer);
+
+    let withdraw_result = client.withdraw(&organizer, &1_u32);
+    assert_eq!(withdraw_result, Err(AjoError::CirclePanicked));
+}
+
+#[test]
+fn test_resume_reenables_deposit_and_withdrawal() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, organizer, token_address, _admin) = setup_basic_circle(&env);
+    let token_client = token::Client::new(&env, &token_address);
+
+    // Pause and verify deposit blocked
+    client.panic(&organizer);
+    assert_eq!(client.deposit(&organizer), Err(AjoError::CirclePanicked));
+
+    // Resume and verify operations succeed
+    client.resume(&organizer);
+    assert_eq!(client.deposit(&organizer), Ok(()));
+
+    let pool = client.get_total_pool();
+    assert_eq!(pool, 100_i128);
+
+    // Attempt withdraw via wrapper
+    let payout = client.withdraw(&organizer, &1_u32);
+    assert_eq!(payout, Ok(100_i128));
+    assert_eq!(token_client.balance(&organizer), 10000_i128);
 }
 
 #[test]
@@ -289,7 +347,7 @@ fn test_deposit_panics_when_missed_count_is_3() {
     // Note: The test framework may not catch the panic properly,
     // so we verify the member is disqualified instead
     let deposit_result = client.deposit(&member1);
-    
+
     // After 3 slashes, member should be disqualified (is_active = false)
     // So deposit should fail with Disqualified error
     assert_eq!(deposit_result, Err(AjoError::Disqualified));
@@ -482,7 +540,8 @@ fn test_deposit_with_zero_contribution_amount_fails() {
     let token_address = Address::generate(&env);
 
     // Try to initialize with 0 contribution amount (should fail in initialize)
-    let result = client.initialize_circle(&organizer, &token_address, &0_i128, &7_u32, &12_u32, &5_u32);
+    let result =
+        client.initialize_circle(&organizer, &token_address, &0_i128, &7_u32, &12_u32, &5_u32);
     assert_eq!(result, Err(AjoError::InvalidInput));
 }
 
@@ -498,7 +557,14 @@ fn test_deposit_with_negative_contribution_amount_fails() {
     let token_address = Address::generate(&env);
 
     // Try to initialize with negative contribution amount (should fail in initialize)
-    let result = client.initialize_circle(&organizer, &token_address, &-100_i128, &7_u32, &12_u32, &5_u32);
+    let result = client.initialize_circle(
+        &organizer,
+        &token_address,
+        &-100_i128,
+        &7_u32,
+        &12_u32,
+        &5_u32,
+    );
     assert_eq!(result, Err(AjoError::InvalidInput));
 }
 
@@ -517,7 +583,7 @@ fn test_deposit_advances_round_when_all_members_contribute() {
     // All members deposit for round 1
     client.deposit(&organizer);
     client.deposit(&member1);
-    
+
     // Round should not advance yet (only 2 of 3 members)
     let state_after_two = client.get_circle_state().unwrap();
     assert_eq!(state_after_two.current_round, 1_u32);
@@ -548,7 +614,14 @@ fn test_deposit_with_very_large_amount() {
     let large_amount = 1_000_000_000_i128;
     token_admin.mint(&organizer, &large_amount * 10);
 
-    client.initialize_circle(&organizer, &token_address, &large_amount, &7_u32, &12_u32, &5_u32);
+    client.initialize_circle(
+        &organizer,
+        &token_address,
+        &large_amount,
+        &7_u32,
+        &12_u32,
+        &5_u32,
+    );
 
     // Deposit large amount
     let result = client.deposit(&organizer);
@@ -641,7 +714,14 @@ fn test_deposit_handles_pool_overflow_gracefully() {
     token_admin.mint(&organizer, &max_amount);
 
     // Initialize with large amount
-    client.initialize_circle(&organizer, &token_address, &max_amount, &7_u32, &12_u32, &5_u32);
+    client.initialize_circle(
+        &organizer,
+        &token_address,
+        &max_amount,
+        &7_u32,
+        &12_u32,
+        &5_u32,
+    );
 
     // First deposit should succeed
     let result = client.deposit(&organizer);
