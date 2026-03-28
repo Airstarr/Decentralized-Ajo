@@ -55,10 +55,6 @@ contract AjoCircle is Ownable, ReentrancyGuard, Pausable {
     mapping(uint256 => uint256) public roundDeadline;
     mapping(uint256 => uint256) public totalPool;
     
-    // Cycle to designated winner mapping
-    mapping(uint256 => mapping(uint256 => address)) public cycleWinners;
-    mapping(uint256 => mapping(uint256 => bool)) public cycleWithdrawn;
-    
     // ---------------- Counters ----------------
     uint256 public circleCounter;
     
@@ -92,19 +88,6 @@ contract AjoCircle is Ownable, ReentrancyGuard, Pausable {
         uint256 round
     );
     
-    event WinnerDesignated(
-        uint256 indexed circleId,
-        uint256 indexed cycle,
-        address indexed winner
-    );
-    
-    event WithdrawalProcessed(
-        uint256 indexed circleId,
-        uint256 indexed cycle,
-        address indexed winner,
-        uint256 amount
-    );
-    
     event CirclePaused(uint256 indexed circleId);
     event CircleResumed(uint256 indexed circleId);
     
@@ -117,10 +100,6 @@ contract AjoCircle is Ownable, ReentrancyGuard, Pausable {
     error InsufficientContribution();
     error PriceFeedUnavailable();
     error ArithmeticOverflow();
-    error CycleNotMature();
-    error PoolNotFullyFunded();
-    error NotDesignatedWinner();
-    error AlreadyWithdrawn();
 
     // ---------------- Modifiers ----------------
     modifier onlyCircleMember(uint256 _circleId) {
@@ -528,138 +507,6 @@ contract AjoCircle is Ownable, ReentrancyGuard, Pausable {
         
         (bool success, ) = payable(owner()).call{value: _amount}("");
         require(success, "Transfer failed");
-    }
-
-    /**
-     * @dev Designate a winner for a specific cycle (only organizer)
-     * @param _circleId Circle ID
-     * @param _cycle Cycle number
-     * @param _winner Winner address
-     */
-    function designateWinner(uint256 _circleId, uint256 _cycle, address _winner)
-        external
-        circleExists(_circleId)
-        onlyCircleMember(_circleId)
-    {
-        Circle storage circle = circles[_circleId];
-        require(msg.sender == circle.organizer, "Only organizer can designate winner");
-        require(isMember(_circleId, _winner), "Winner must be a circle member");
-        require(_cycle <= circle.maxRounds, "Invalid cycle number");
-        require(cycleWinners[_circleId][_cycle] == address(0), "Winner already designated");
-        
-        cycleWinners[_circleId][_cycle] = _winner;
-        
-        emit WinnerDesignated(_circleId, _cycle, _winner);
-    }
-
-    /**
-     * @dev Withdraw function for designated winner of a specific cycle
-     * @param _circleId Circle ID
-     * @param _cycle Cycle number
-     */
-    function withdraw(uint256 _circleId, uint256 _cycle)
-        external
-        nonReentrant
-        circleExists(_circleId)
-        onlyCircleMember(_circleId)
-        whenNotPaused
-    {
-        Circle storage circle = circles[_circleId];
-        
-        // Check if caller is the designated winner for this cycle
-        require(cycleWinners[_circleId][_cycle] == msg.sender, "Not designated winner");
-        require(!cycleWithdrawn[_circleId][_cycle], "Already withdrawn");
-        
-        // Check if cycle has matured (time-based check)
-        require(block.timestamp >= roundDeadline[_circleId], "Cycle not mature");
-        
-        // Check if pool is fully funded for this cycle
-        uint256 expectedPoolAmount = getCurrentContributionAmount(_circleId) * circle.memberCount;
-        require(totalPool[_circleId] >= expectedPoolAmount, "Pool not fully funded");
-        
-        // Mark as withdrawn to prevent reentrancy
-        cycleWithdrawn[_circleId][_cycle] = true;
-        
-        uint256 withdrawalAmount = totalPool[_circleId];
-        
-        // Update member stats
-        Member storage member = members[_circleId][msg.sender];
-        member.totalWithdrawn = member.totalWithdrawn.add(withdrawalAmount);
-        
-        // Reset pool for next cycle
-        totalPool[_circleId] = 0;
-        
-        // Safe ether transfer
-        (bool success, ) = payable(msg.sender).call{value: withdrawalAmount}("");
-        require(success, "Transfer failed");
-        
-        emit WithdrawalProcessed(_circleId, _cycle, msg.sender, withdrawalAmount);
-        
-        // Move to next round if this was the current round
-        if (_cycle == circle.currentRound && circle.currentRound < circle.maxRounds) {
-            _nextRound(_circleId);
-        }
-    }
-
-    /**
-     * @dev Check if a cycle is matured (ready for withdrawal)
-     * @param _circleId Circle ID
-     * @param _cycle Cycle number
-     * @return matured True if cycle is matured
-     */
-    function isCycleMatured(uint256 _circleId, uint256 _cycle) 
-        external 
-        view 
-        circleExists(_circleId) 
-        returns (bool) 
-    {
-        return block.timestamp >= roundDeadline[_circleId];
-    }
-
-    /**
-     * @dev Check if pool is fully funded for a cycle
-     * @param _circleId Circle ID
-     * @return funded True if pool is fully funded
-     */
-    function isPoolFullyFunded(uint256 _circleId) 
-        external 
-        view 
-        circleExists(_circleId) 
-        returns (bool) 
-    {
-        Circle storage circle = circles[_circleId];
-        uint256 expectedPoolAmount = getCurrentContributionAmount(_circleId) * circle.memberCount;
-        return totalPool[_circleId] >= expectedPoolAmount;
-    }
-
-    /**
-     * @dev Get the designated winner for a specific cycle
-     * @param _circleId Circle ID
-     * @param _cycle Cycle number
-     * @return winner Winner address
-     */
-    function getCycleWinner(uint256 _circleId, uint256 _cycle) 
-        external 
-        view 
-        circleExists(_circleId) 
-        returns (address) 
-    {
-        return cycleWinners[_circleId][_cycle];
-    }
-
-    /**
-     * @dev Check if a cycle has been withdrawn
-     * @param _circleId Circle ID
-     * @param _cycle Cycle number
-     * @return withdrawn True if withdrawn
-     */
-    function isCycleWithdrawn(uint256 _circleId, uint256 _cycle) 
-        external 
-        view 
-        circleExists(_circleId) 
-        returns (bool) 
-    {
-        return cycleWithdrawn[_circleId][_cycle];
     }
 
     // ---------------- Internal Functions ----------------

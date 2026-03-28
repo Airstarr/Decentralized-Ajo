@@ -10,10 +10,10 @@
 //! - Error conditions (non-members, insufficient funds, etc.)
 //! - Edge cases and boundary conditions
 
-use crate::{AjoCircle, AjoCircleClient, AjoError, CircleStatus, DataKey, MemberStanding};
+use crate::{AjoCircle, AjoCircleClient, AjoError};
 use soroban_sdk::{
     testutils::{Address as _, Ledger, LedgerInfo},
-    token, Address, Env, Map,
+    token, Address, Env,
 };
 
 // ─── Test Helpers ─────────────────────────────────────────────────────────────
@@ -25,7 +25,7 @@ fn setup_basic_circle(env: &Env) -> (AjoCircleClient, Address, Address, Address)
 
     let organizer = Address::generate(env);
     let admin = Address::generate(env);
-    let token_address = env.register_stellar_asset_contract_v2(admin.clone()).address();
+    let token_address = env.register_stellar_asset_contract(admin.clone());
     let token_admin = token::StellarAssetClient::new(env, &token_address);
 
     // Mint tokens to organizer and contract
@@ -323,7 +323,7 @@ fn test_claim_payout_calculation_with_different_contribution_amount() {
 
     let organizer = Address::generate(&env);
     let admin = Address::generate(&env);
-    let token_address = env.register_stellar_asset_contract_v2(admin.clone()).address();
+    let token_address = env.register_stellar_asset_contract(admin.clone());
     let token_admin = token::StellarAssetClient::new(&env, &token_address);
 
     // Initialize with different contribution amount
@@ -356,7 +356,7 @@ fn test_claim_payout_with_maximum_members() {
 
     let organizer = Address::generate(&env);
     let admin = Address::generate(&env);
-    let token_address = env.register_stellar_asset_contract_v2(admin.clone()).address();
+    let token_address = env.register_stellar_asset_contract(admin.clone());
     let token_admin = token::StellarAssetClient::new(&env, &token_address);
 
     // Initialize with max members (5)
@@ -366,7 +366,7 @@ fn test_claim_payout_with_maximum_members() {
     client.initialize_circle(&organizer, &token_address, &100_i128, &7_u32, &12_u32, &5_u32);
 
     // Add 4 more members (total 5)
-    for i in 0..4 {
+    for _i in 0..4 {
         let member = Address::generate(&env);
         client.add_member(&organizer, &member);
     }
@@ -386,7 +386,7 @@ fn test_claim_payout_with_minimum_contribution() {
 
     let organizer = Address::generate(&env);
     let admin = Address::generate(&env);
-    let token_address = env.register_stellar_asset_contract_v2(admin.clone()).address();
+    let token_address = env.register_stellar_asset_contract(admin.clone());
     let token_admin = token::StellarAssetClient::new(&env, &token_address);
 
     // Initialize with minimum contribution (1)
@@ -410,7 +410,7 @@ fn test_claim_payout_with_large_amounts() {
 
     let organizer = Address::generate(&env);
     let admin = Address::generate(&env);
-    let token_address = env.register_stellar_asset_contract_v2(admin.clone()).address();
+    let token_address = env.register_stellar_asset_contract(admin.clone());
     let token_admin = token::StellarAssetClient::new(&env, &token_address);
 
     // Initialize with large contribution

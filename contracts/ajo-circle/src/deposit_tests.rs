@@ -8,10 +8,10 @@
 //! - State transitions (balance tracking, mapping updates, pool accounting)
 //! - Edge cases (panic state, disqualified members, non-members)
 
-use crate::{AjoCircle, AjoCircleClient, AjoError, CircleStatus, DataKey, MemberStanding};
+use crate::{AjoCircle, AjoCircleClient, AjoError};
 use soroban_sdk::{
     testutils::{Address as _, Ledger, LedgerInfo},
-    token, Address, Env, Map,
+    token, Address, Env,
 };
 
 // ─── Test Helpers ─────────────────────────────────────────────────────────────
@@ -732,7 +732,7 @@ fn test_deposit_handles_pool_overflow_gracefully() {
 
     // Second deposit should fail due to overflow in pool calculation
     let result2 = client.deposit(&organizer);
-    assert_eq!(result2, Err(AjoError::InvalidInput));
+    assert_eq!(result2, Err(AjoError::ArithmeticOverflow));
 }
 // ─── ADDITIONAL EDGE CASES & INTEGRATION TESTS ───────────────────────────────
 

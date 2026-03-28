@@ -16,10 +16,20 @@ contract Ajo {
     uint256 public maxMembers;
 
     /// @notice List of all members in the Ajo pool
-    address[] public members;
+    mapping(uint256 => address) public members;
+    uint256 public membersCount;
 
     /// @notice Mapping from member address to their current balance in the pool
     mapping(address => uint256) public balances;
+
+    /// @notice The total amount currently held in the pool
+    uint256 public totalPool;
+
+    /// @notice Mapping from member address to the timestamp of their last deposit
+    mapping(address => uint256) public lastDepositAt;
+
+    /// @notice Event emitted when a deposit is made
+    event DepositMade(address indexed member, uint256 amount, uint256 timestamp);
 
     /**
      * @dev Struct to represent a member's state within the pool
@@ -47,5 +57,22 @@ contract Ajo {
         contributionAmount = _contributionAmount;
         cycleDuration = _cycleDuration;
         maxMembers = _maxMembers;
+    }
+
+    /**
+     * @notice Allows a member to deposit the required contribution amount.
+     * @dev Enforces strict deposit of contributionAmount and updates pool state.
+     */
+    function deposit() external payable {
+        require(msg.value == contributionAmount, "Deposit must equal contribution amount");
+
+        // Record the timestamp of the deposit mapping it to the user
+        lastDepositAt[msg.sender] = block.timestamp;
+
+        // Update balances and total pool tracking variable securely
+        balances[msg.sender] += msg.value;
+        totalPool += msg.value;
+
+        emit DepositMade(msg.sender, msg.value, block.timestamp);
     }
 }
