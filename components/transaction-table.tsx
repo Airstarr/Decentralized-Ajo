@@ -89,10 +89,39 @@ export function TransactionTable({ transactions, onSort, sortBy, order }: Transa
         </Table>
       </div>
 
-      {/* Mobile View */}
-      <div className="block md:hidden space-y-4">
+      {/* Mobile View: stacked rows that become grid on md+ */}
+      <div className="space-y-3 md:hidden">
+        <div className="hidden md:grid grid-cols-5 font-bold border-b pb-2">
+          <span>Date</span>
+          <span>Amount</span>
+          <span>Circle</span>
+          <span>Status</span>
+          <span>Transaction</span>
+        </div>
+
         {transactions.map((tx) => (
-          <TransactionCard key={tx.id} transaction={tx} />
+          <div
+            key={tx.id}
+            className="flex flex-col md:grid md:grid-cols-5 p-3 md:p-0 border rounded md:border-none shadow-sm md:shadow-none"
+          >
+            <span className="text-sm text-muted-foreground md:text-black">
+              {new Date(tx.createdAt).toLocaleDateString()}
+            </span>
+            <span className="font-semibold">{tx.amount.toFixed(2)} XLM</span>
+            <span className="text-blue-600">
+              <Link href={`/circles/${tx.circle.id}`} className="hover:underline">
+                {tx.circle.name}
+              </Link>
+            </span>
+            <span className="">
+              <Badge variant={statusVariant[tx.status] ?? 'secondary'} className="h-fit py-0.5 px-2">
+                {tx.status}
+              </Badge>
+            </span>
+            <span className="text-sm truncate font-mono" title={tx.id}>
+              {tx.id}
+            </span>
+          </div>
         ))}
       </div>
     </div>
