@@ -3,6 +3,9 @@ import { prisma } from '@/lib/prisma';
 import { verifyToken, extractToken } from '@/lib/auth';
 import { applyRateLimit } from '@/lib/api-helpers';
 import { RATE_LIMITS } from '@/lib/rate-limit';
+import { createChildLogger } from '@/lib/logger';
+
+const logger = createChildLogger({ service: 'api', route: '/api/circles/[id]/join' });
 
 export async function GET(
   request: NextRequest,
@@ -44,7 +47,7 @@ export async function GET(
 
     return NextResponse.json({ success: true, circle, alreadyMember: !!alreadyMember });
   } catch (err) {
-    console.error('Preview circle error:', err);
+    logger.error('Preview circle error', { err });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
@@ -97,7 +100,7 @@ export async function POST(
 
     return NextResponse.json({ success: true, member: newMember }, { status: 201 });
   } catch (err) {
-    console.error('Join circle error:', err);
+    logger.error('Join circle error', { err });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

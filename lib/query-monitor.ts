@@ -1,4 +1,7 @@
 // Query monitoring and performance analysis utilities
+import { createChildLogger } from '@/lib/logger';
+
+const logger = createChildLogger({ service: 'lib', module: 'query-monitor' });
 
 export interface QueryMetrics {
   query: string;
@@ -33,19 +36,23 @@ class QueryMonitor {
       });
       
       if (duration > this.slowQueryThreshold) {
-        console.warn(`🐌 Slow query detected (${duration}ms): ${query}`, {
+        logger.warn('Slow query detected', {
+          query,
+          duration,
           userId,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
         });
       }
       
       return result;
     } catch (error) {
       const duration = Date.now() - startTime;
-      console.error(`❌ Query failed (${duration}ms): ${query}`, {
-        error: (error as Error).message,
+      logger.error('Query failed', {
+        err: error,
+        query,
+        duration,
         userId,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       });
       throw error;
     }
@@ -90,21 +97,19 @@ class QueryMonitor {
   // Log current performance stats
   logStats(): void {
     const stats = this.getStats();
-    console.log('📊 Query Performance Stats:', {
+    logger.info('Query performance stats', {
       totalQueries: stats.totalQueries,
       slowQueries: stats.slowQueries,
       slowQueryPercentage: stats.totalQueries > 0 
         ? ((stats.slowQueries / stats.totalQueries) * 100).toFixed(2) + '%'
         : '0%',
-      averageDuration: `${stats.averageDuration.toFixed(2)}ms`
+      averageDuration: `${stats.averageDuration.toFixed(2)}ms`,
+      slowestQueries: stats.slowestQueries.map((query) => ({
+        query: query.query,
+        duration: query.duration,
+        userId: query.userId,
+      })),
     });
-
-    if (stats.slowestQueries.length > 0) {
-      console.log('🐌 Slowest Queries:');
-      stats.slowestQueries.forEach((query, index) => {
-        console.log(`  ${index + 1}. ${query.query} (${query.duration}ms)`);
-      });
-    }
   }
 
   // Reset metrics
@@ -120,11 +125,11 @@ export const queryMonitor = new QueryMonitor();
 export const explainQuery = async (query: string): Promise<any> => {
   try {
     // This would need to be implemented based on your database setup
-    console.log('🔍 EXPLAIN ANALYZE for query:', query);
+    logger.debug('EXPLAIN ANALYZE requested for query', { query });
     // Return the query plan analysis
     return null;
   } catch (error) {
-    console.error('Failed to analyze query:', error);
+    logger.error('Failed to analyze query', { err: error, query });
     return null;
   }
 };

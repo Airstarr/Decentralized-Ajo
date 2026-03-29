@@ -1,11 +1,12 @@
 import express, { Request, Response } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-import logger from './config/logger';
+import { createChildLogger } from './config/logger';
 import { requestLogger } from './middleware/requestLogger';
 import { startAjoCycleCronJob } from './services/ajo-cycle-cron';
 
 const app = express();
+const logger = createChildLogger({ service: 'express', module: 'server-index' });
 
 // Security middleware
 app.use(helmet());
@@ -62,8 +63,7 @@ app.get('/health', (req: Request, res: Response) => {
 // Error handling middleware
 app.use((err: Error, req: Request, res: Response, next: any) => {
   logger.error('Unhandled error', {
-    error: err.message,
-    stack: err.stack,
+    err,
     url: req.url,
     method: req.method,
   });

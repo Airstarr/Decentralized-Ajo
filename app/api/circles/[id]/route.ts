@@ -5,6 +5,9 @@ import { validateBody, applyRateLimit } from '@/lib/api-helpers';
 import { UpdateCircleSchema } from '@/lib/validations/circle';
 import type { UpdateCircleInput } from '@/lib/validations/circle';
 import { RATE_LIMITS } from '@/lib/rate-limit';
+import { createChildLogger } from '@/lib/logger';
+
+const logger = createChildLogger({ service: 'api', route: '/api/circles/[id]' });
 
 export async function GET(
   request: NextRequest,
@@ -54,7 +57,7 @@ export async function GET(
 
     return NextResponse.json({ success: true, circle }, { status: 200 });
   } catch (err) {
-    console.error('Get circle error:', err);
+    logger.error('Get circle error', { err });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
@@ -101,7 +104,7 @@ export async function PUT(
 
     return NextResponse.json({ success: true, circle: updatedCircle }, { status: 200 });
   } catch (err) {
-    console.error('Update circle error:', err);
+    logger.error('Update circle error', { err });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

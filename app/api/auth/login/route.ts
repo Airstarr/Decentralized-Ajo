@@ -11,6 +11,9 @@ import {
 import { validateBody, applyRateLimit } from '@/lib/api-helpers';
 import { LoginSchema } from '@/lib/validations/auth';
 import { RATE_LIMITS } from '@/lib/rate-limit';
+import { createChildLogger } from '@/lib/logger';
+
+const logger = createChildLogger({ service: 'api', route: '/api/auth/login' });
 
 export async function POST(request: NextRequest) {
   const rateLimited = applyRateLimit(request, RATE_LIMITS.auth, 'auth:login');
@@ -69,7 +72,7 @@ export async function POST(request: NextRequest) {
 
     return response;
   } catch (err) {
-    console.error('Login error:', err);
+    logger.error('Login error', { err });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

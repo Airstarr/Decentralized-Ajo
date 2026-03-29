@@ -3,8 +3,11 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { verifyToken, extractToken } from '@/lib/auth';
 import { verifyStellarTx } from '@/lib/stellar-verify';
+import { createChildLogger } from '@/lib/logger';
 
 // Zod schema for input validation
+const logger = createChildLogger({ service: 'api', route: '/api/ajos' });
+
 const CreateAjoSchema = z.object({
   name: z.string().trim().min(2, 'Name must be at least 2 characters'),
   description: z.string().trim().optional(),
@@ -59,7 +62,13 @@ export async function POST(request: NextRequest) {
     });
 
     // Fire off asynchronous verification (Notice there is no 'await' here)
-    verifyStellarTx(txHash, newAjo.id).catch(console.error);
+    verifyStellarTx(txHash, newAjo.id).catch((err) => {
+      logger.error('Asynchronous Stellar transaction verification failed', {
+        err,
+        txHash,
+        ajoId: newAjo.id,
+      });
+    });
 
     return NextResponse.json({ success: true, ajo: newAjo }, { status: 201 });
     
@@ -67,7 +76,7 @@ export async function POST(request: NextRequest) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: error.errors }, { status: 400 });
     }
-    console.error('Create Ajo error:', error);
+    logger.error('Create Ajo error', { err: error });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

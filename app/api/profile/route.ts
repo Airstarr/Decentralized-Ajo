@@ -5,6 +5,9 @@ import { verifyToken, extractToken } from '@/lib/auth';
 import { validateBody, applyRateLimit } from '@/lib/api-helpers';
 import { UpdateProfileSchema } from '@/lib/validations/user';
 import { RATE_LIMITS } from '@/lib/rate-limit';
+import { createChildLogger } from '@/lib/logger';
+
+const logger = createChildLogger({ service: 'api', route: '/api/profile' });
 
 const USER_SELECT = {
   id: true,
@@ -35,7 +38,7 @@ export async function GET(request: NextRequest) {
     if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
     return NextResponse.json({ success: true, user });
   } catch (error) {
-    console.error('Get profile error:', error);
+    logger.error('Get profile error', { err: error, userId: payload.userId });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
@@ -77,7 +80,7 @@ export async function PUT(request: NextRequest) {
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
       return NextResponse.json({ error: 'That username or email is already taken' }, { status: 409 });
     }
-    console.error('Update profile error:', err);
+    logger.error('Update profile error', { err, userId: payload.userId });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

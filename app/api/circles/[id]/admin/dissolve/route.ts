@@ -3,6 +3,9 @@ import { prisma } from '@/lib/prisma';
 import { verifyToken, extractToken } from '@/lib/auth';
 import { applyRateLimit } from '@/lib/api-helpers';
 import { RATE_LIMITS } from '@/lib/rate-limit';
+import { createChildLogger } from '@/lib/logger';
+
+const logger = createChildLogger({ service: 'api', route: '/api/circles/[id]/admin/dissolve' });
 
 export async function POST(
   request: NextRequest,
@@ -58,7 +61,7 @@ export async function POST(
       { status: 200 }
     );
   } catch (err) {
-    console.error('Dissolve circle error:', err);
+    logger.error('Dissolve circle error', { err });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

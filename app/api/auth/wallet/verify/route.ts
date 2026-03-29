@@ -3,6 +3,9 @@ import { Keypair } from '@stellar/stellar-sdk';
 import { Buffer } from 'buffer';
 import { prisma } from '@/lib/prisma';
 import { generateToken, generateRefreshToken, getRefreshTokenExpiryDate, isSecureCookieEnvironment, REFRESH_TOKEN_COOKIE_NAME } from '@/lib/auth';
+import { createChildLogger } from '@/lib/logger';
+
+const logger = createChildLogger({ service: 'api', route: '/api/auth/wallet/verify' });
 
 export async function POST(request: NextRequest) {
   try {
@@ -57,7 +60,7 @@ export async function POST(request: NextRequest) {
 
     return response;
   } catch (error) {
-    console.error('Error verifying wallet:', error);
+    logger.error('Error verifying wallet', { err: error });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

@@ -3,6 +3,9 @@ import { prisma } from '@/lib/prisma';
 import { verifyToken, extractToken } from '@/lib/auth';
 import { applyRateLimit } from '@/lib/api-helpers';
 import { RATE_LIMITS } from '@/lib/rate-limit';
+import { createChildLogger } from '@/lib/logger';
+
+const logger = createChildLogger({ service: 'api', route: '/api/ajos/[id]/join' });
 
 /**
  * POST /api/ajos/:id/join
@@ -44,7 +47,7 @@ export async function POST(
 
     return NextResponse.json({ message: 'Successfully joined Ajo' });
   } catch (err) {
-    console.error('[POST /api/ajos/:id/join]', err);
+    logger.error('Join ajo failed', { err });
     return NextResponse.json({ error: 'Already joined or DB error' }, { status: 500 });
   }
 }

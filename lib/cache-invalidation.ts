@@ -1,15 +1,18 @@
 import { redisClient } from './redis';
+import { createChildLogger } from '@/lib/logger';
 
 // Cache invalidation utilities for keeping dashboard data fresh
+const logger = createChildLogger({ service: 'lib', module: 'cache-invalidation' });
+
 export class CacheInvalidation {
   
   // Invalidate user's dashboard cache when their data changes
   static async invalidateUserDashboard(userId: string): Promise<void> {
     try {
       await redisClient.invalidateUserCache(userId);
-      console.log(`Invalidated dashboard cache for user: ${userId}`);
+      logger.info('Invalidated dashboard cache', { userId });
     } catch (error) {
-      console.error('Failed to invalidate user dashboard cache:', error);
+      logger.error('Failed to invalidate user dashboard cache', { err: error, userId });
     }
   }
 
@@ -24,11 +27,11 @@ export class CacheInvalidation {
         const keys = await client.keys(pattern);
         if (keys.length > 0) {
           await client.del(...keys);
-          console.log(`Invalidated ${keys.length} circle list cache entries`);
+          logger.info('Invalidated circle list cache entries', { circleId, keyCount: keys.length });
         }
       }
     } catch (error) {
-      console.error('Failed to invalidate circle list cache:', error);
+      logger.error('Failed to invalidate circle list cache', { err: error, circleId });
     }
   }
 
@@ -41,11 +44,11 @@ export class CacheInvalidation {
         const keys = await client.keys(pattern);
         if (keys.length > 0) {
           await client.del(...keys);
-          console.log(`Invalidated ${keys.length} dashboard cache entries`);
+          logger.info('Invalidated dashboard cache entries', { keyCount: keys.length });
         }
       }
     } catch (error) {
-      console.error('Failed to invalidate all dashboard caches:', error);
+      logger.error('Failed to invalidate all dashboard caches', { err: error });
     }
   }
 
@@ -54,9 +57,9 @@ export class CacheInvalidation {
     try {
       // This would be called via a background job or webhook
       // For now, we'll log that it should be done
-      console.log('Materialized views refresh triggered - should be handled by background job');
+      logger.info('Materialized views refresh triggered - should be handled by background job');
     } catch (error) {
-      console.error('Failed to refresh materialized views:', error);
+      logger.error('Failed to refresh materialized views', { err: error });
     }
   }
 }

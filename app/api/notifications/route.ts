@@ -3,6 +3,9 @@ import { prisma } from '@/lib/prisma';
 import { verifyToken, extractToken } from '@/lib/auth';
 import { applyRateLimit } from '@/lib/api-helpers';
 import { RATE_LIMITS } from '@/lib/rate-limit';
+import { createChildLogger } from '@/lib/logger';
+
+const logger = createChildLogger({ service: 'api', route: '/api/notifications' });
 
 // GET /api/notifications — fetch notifications for the current user
 export async function GET(request: NextRequest) {
@@ -26,7 +29,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ notifications, unreadCount });
   } catch (err) {
-    console.error('Fetch notifications error:', err);
+    logger.error('Fetch notifications error', { err });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
@@ -47,7 +50,7 @@ export async function PATCH(request: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (err) {
-    console.error('Mark all read error:', err);
+    logger.error('Mark all notifications read error', { err });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

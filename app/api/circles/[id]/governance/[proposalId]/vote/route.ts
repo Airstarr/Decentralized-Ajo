@@ -5,6 +5,9 @@ import { validateBody, applyRateLimit } from '@/lib/api-helpers';
 import { CastVoteSchema } from '@/lib/validations/governance';
 import type { CastVoteInput } from '@/lib/validations/governance';
 import { RATE_LIMITS } from '@/lib/rate-limit';
+import { createChildLogger } from '@/lib/logger';
+
+const logger = createChildLogger({ service: 'api', route: '/api/circles/[id]/governance/[proposalId]/vote' });
 
 export async function POST(
   request: NextRequest,
@@ -115,7 +118,7 @@ export async function POST(
 
     return NextResponse.json({ success: true, vote }, { status: 201 });
   } catch (err) {
-    console.error('Cast vote error:', err);
+    logger.error('Cast vote error', { err });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

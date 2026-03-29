@@ -1,5 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
-import logger from '../config/logger';
+import { createChildLogger } from '../config/logger';
+
+const logger = createChildLogger({ service: 'express', module: 'request-logger' });
 
 /**
  * Middleware to log all incoming HTTP requests

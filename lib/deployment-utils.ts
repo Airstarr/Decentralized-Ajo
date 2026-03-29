@@ -2,6 +2,9 @@
  * Deployment Utilities
  * Helper functions for managing deployments and contract interactions
  */
+import { createChildLogger } from '@/lib/logger';
+
+const logger = createChildLogger({ service: 'lib', module: 'deployment-utils' });
 
 export interface DeploymentConfig {
   network: string;
@@ -103,17 +106,17 @@ Frontend Integration:
 export function validateNetworkConfig(networkName: string): boolean {
   const config = NETWORK_CONFIG[networkName];
   if (!config) {
-    console.error(`Unknown network: ${networkName}`);
+    logger.error('Unknown network', { networkName });
     return false;
   }
 
   if (networkName === "sepolia" && !process.env.SEPOLIA_RPC_URL) {
-    console.error("SEPOLIA_RPC_URL environment variable not set");
+    logger.error('SEPOLIA_RPC_URL environment variable not set');
     return false;
   }
 
   if (networkName === "sepolia" && !process.env.SEPOLIA_PRIVATE_KEY) {
-    console.error("SEPOLIA_PRIVATE_KEY environment variable not set");
+    logger.error('SEPOLIA_PRIVATE_KEY environment variable not set');
     return false;
   }
 

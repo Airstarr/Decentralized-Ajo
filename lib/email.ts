@@ -1,6 +1,8 @@
 import { Resend } from 'resend';
+import { createChildLogger } from '@/lib/logger';
 
 const FROM = 'Ajo Platform <alerts@yourdomain.com>';
+const logger = createChildLogger({ service: 'lib', module: 'email' });
 
 function getResend(): Resend | null {
   const key = process.env.RESEND_API_KEY;
@@ -19,7 +21,7 @@ export async function sendPayoutAlert(email: string, userName: string, amount: n
       html: `<p>Hi ${userName},</p><p>Your payout of <strong>${amount} XLM</strong> is ready to claim. Log in to your Ajo dashboard to claim it.</p>`,
     });
   } catch (err) {
-    console.error('[email] sendPayoutAlert failed:', err);
+    logger.error('sendPayoutAlert failed', { err, email });
   }
 }
 
@@ -34,6 +36,6 @@ export async function sendContributionReminder(email: string, userName: string, 
       html: `<p>Hi ${userName},</p><p>Your contribution of <strong>${amount} XLM</strong> is due for the circle <strong>${circleName}</strong>. Please contribute before the deadline.</p>`,
     });
   } catch (err) {
-    console.error('[email] sendContributionReminder failed:', err);
+    logger.error('sendContributionReminder failed', { err, email, circleName });
   }
 }

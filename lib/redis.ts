@@ -1,6 +1,9 @@
 import Redis from 'ioredis';
+import { createChildLogger } from '@/lib/logger';
 
 // Redis client configuration for caching dashboard statistics
+const logger = createChildLogger({ service: 'lib', module: 'redis' });
+
 class RedisClient {
   private client: Redis | null = null;
   private isConnected: boolean = false;
@@ -33,23 +36,23 @@ class RedisClient {
       }
 
       this.client.on('connect', () => {
-        console.log('Redis connected successfully');
+        logger.info('Redis connected successfully');
         this.isConnected = true;
       });
 
       this.client.on('error', (err) => {
-        console.error('Redis connection error:', err);
+        logger.error('Redis connection error', { err });
         this.isConnected = false;
       });
 
       this.client.on('close', () => {
-        console.log('Redis connection closed');
+        logger.info('Redis connection closed');
         this.isConnected = false;
       });
 
       await this.client.connect();
     } catch (error) {
-      console.error('Failed to connect to Redis:', error);
+      logger.error('Failed to connect to Redis', { err: error });
       this.isConnected = false;
     }
   }
@@ -70,7 +73,7 @@ class RedisClient {
       const key = `dashboard:stats:${userId}`;
       await this.client!.setex(key, ttlSeconds, JSON.stringify(stats));
     } catch (error) {
-      console.error('Failed to cache stats:', error);
+      logger.error('Failed to cache stats', { err: error, userId });
     }
   }
 
@@ -83,7 +86,7 @@ class RedisClient {
       const cached = await this.client!.get(key);
       return cached ? JSON.parse(cached) : null;
     } catch (error) {
-      console.error('Failed to get cached stats:', error);
+      logger.error('Failed to get cached stats', { err: error, userId });
       return null;
     }
   }
@@ -96,7 +99,7 @@ class RedisClient {
       const pattern = `dashboard:stats:${userId}`;
       await this.client!.del(pattern);
     } catch (error) {
-      console.error('Failed to invalidate user cache:', error);
+      logger.error('Failed to invalidate user cache', { err: error, userId });
     }
   }
 
@@ -108,7 +111,7 @@ class RedisClient {
       const key = `circles:list:${userId}:${Buffer.from(params).toString('base64')}`;
       await this.client!.setex(key, ttlSeconds, JSON.stringify(data));
     } catch (error) {
-      console.error('Failed to cache circle list:', error);
+      logger.error('Failed to cache circle list', { err: error, userId });
     }
   }
 
@@ -121,7 +124,7 @@ class RedisClient {
       const cached = await this.client!.get(key);
       return cached ? JSON.parse(cached) : null;
     } catch (error) {
-      console.error('Failed to get cached circle list:', error);
+      logger.error('Failed to get cached circle list', { err: error, userId });
       return null;
     }
   }

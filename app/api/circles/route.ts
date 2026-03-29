@@ -1,16 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken, extractToken } from '@/lib/auth';
-import { applyRateLimit } from '@/lib/api-helpers';
-import { RATE_LIMITS } from '@/lib/rate-limit';
-import { CircleStatus } from '@prisma/client';
-
-// GET - List circles with pagination, filtering, and sorting
-import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { verifyToken, extractToken } from '@/lib/auth';
 import { redisClient } from '@/lib/redis';
 import { CircleStatus } from '@prisma/client';
+import { createChildLogger } from '@/lib/logger';
+
+const logger = createChildLogger({ service: 'api', route: '/api/circles' });
 
 export async function GET(request: NextRequest) {
   const token = extractToken(request.headers.get('authorization'));
@@ -31,9 +26,10 @@ export async function GET(request: NextRequest) {
     const statusParam = searchParams.get('status')?.toUpperCase();
     const durationParam = searchParams.get('duration'); // Weekly, Monthly, Quarterly
     const sortBy = searchParams.get('sortBy') || 'newest'; // newest, size_desc, size_asc, name_asc, name_desc
+    const search = searchParams.get('search')?.trim() || '';
 
     // Create cache key from query parameters
-    const cacheParams = JSON.stringify({ page, limit, statusParam, durationParam, sortBy, searchQuery });
+    const cacheParams = JSON.stringify({ page, limit, statusParam, durationParam, sortBy, search });
     
     // Try to get cached results first
     const cachedResult = await redisClient.getCachedCircleList(payload.userId, cacheParams);
@@ -50,7 +46,6 @@ export async function GET(request: NextRequest) {
     }
 
     const skip = (page - 1) * limit;
-    const search = searchParams.get('search')?.trim() || '';
 
     const durationDaysMap: Record<string, number> = {
       Weekly: 7,
@@ -144,7 +139,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(result, { status: 200 });
   } catch (error) {
-    console.error('List circles error:', error);
+    logger.error('List circles error', { err: error });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

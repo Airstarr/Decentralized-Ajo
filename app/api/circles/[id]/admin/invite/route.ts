@@ -4,10 +4,12 @@ import { verifyToken, extractToken } from '@/lib/auth';
 import { validateBody, applyRateLimit } from '@/lib/api-helpers';
 import { RATE_LIMITS } from '@/lib/rate-limit';
 import { z } from 'zod';
+import { createChildLogger } from '@/lib/logger';
 
 const InviteSchema = z.object({
   email: z.string().email('Invalid email address'),
 });
+const logger = createChildLogger({ service: 'api', route: '/api/circles/[id]/admin/invite' });
 
 export async function POST(
   request: NextRequest,
@@ -77,7 +79,7 @@ export async function POST(
       { status: 200 }
     );
   } catch (err) {
-    console.error('Invite member error:', err);
+    logger.error('Invite member error', { err });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

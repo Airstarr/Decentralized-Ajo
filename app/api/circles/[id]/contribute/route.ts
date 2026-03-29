@@ -5,6 +5,9 @@ import { validateBody, applyRateLimit } from '@/lib/api-helpers';
 import { ContributeSchema } from '@/lib/validations/circle';
 import { RATE_LIMITS } from '@/lib/rate-limit';
 import { sendContributionReminder, sendPayoutAlert } from '@/lib/email';
+import { createChildLogger } from '@/lib/logger';
+
+const logger = createChildLogger({ service: 'api', route: '/api/circles/[id]/contribute' });
 
 export async function POST(
   request: NextRequest,
@@ -82,7 +85,7 @@ export async function POST(
 
     return NextResponse.json({ success: true, contribution }, { status: 201 });
   } catch (err) {
-    console.error('Contribute error:', err);
+    logger.error('Contribute error', { err });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

@@ -12,6 +12,9 @@ import {
 import { validateBody, applyRateLimit } from '@/lib/api-helpers';
 import { RegisterSchema } from '@/lib/validations/auth';
 import { RATE_LIMITS } from '@/lib/rate-limit';
+import { createChildLogger } from '@/lib/logger';
+
+const logger = createChildLogger({ service: 'api', route: '/api/auth/register' });
 
 export async function POST(request: NextRequest) {
   const rateLimited = applyRateLimit(request, RATE_LIMITS.auth, 'auth:register');
@@ -74,7 +77,7 @@ export async function POST(request: NextRequest) {
 
     return response;
   } catch (err) {
-    console.error('Registration error:', err);
+    logger.error('Registration error', { err });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

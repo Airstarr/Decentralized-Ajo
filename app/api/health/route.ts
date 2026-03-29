@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { createChildLogger } from '@/lib/logger';
+
+const logger = createChildLogger({ service: 'api', route: '/api/health' });
 
 export async function GET() {
   const start = Date.now();
@@ -17,7 +20,7 @@ export async function GET() {
       },
     });
   } catch (error) {
-    console.error('Health check failed:', error);
+    logger.error('Health check failed', { err: error });
 
     return NextResponse.json(
       {

@@ -1,8 +1,9 @@
 import cron from 'node-cron';
 import { prisma } from '@/lib/prisma';
-import logger from '../config/logger';
+import { createChildLogger } from '../config/logger';
 
 const CRON_SCHEDULE = '0 * * * *';
+const logger = createChildLogger({ service: 'express', module: 'ajo-cycle-cron' });
 
 async function processEndedAjoCycles(): Promise<void> {
   const now = new Date();
@@ -74,7 +75,7 @@ async function processEndedAjoCycles(): Promise<void> {
 
       logger.info(`[cron:ajo-cycle] Updated cycle ${cycle.id} (${cycle.name}) to ACTION_REQUIRED`);
     } catch (error) {
-      logger.error(`[cron:ajo-cycle] Failed to process cycle ${cycle.id}`, { error });
+      logger.error(`[cron:ajo-cycle] Failed to process cycle ${cycle.id}`, { err: error, cycleId: cycle.id });
     }
   }
 }
@@ -86,7 +87,7 @@ export function startAjoCycleCronJob(): void {
       try {
         await processEndedAjoCycles();
       } catch (error) {
-        logger.error('[cron:ajo-cycle] Unexpected error during cycle processing', { error });
+        logger.error('[cron:ajo-cycle] Unexpected error during cycle processing', { err: error });
       }
     });
     logger.info(`[cron:ajo-cycle] Scheduled job started with pattern: ${CRON_SCHEDULE}`);

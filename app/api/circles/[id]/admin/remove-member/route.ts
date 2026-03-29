@@ -4,10 +4,12 @@ import { verifyToken, extractToken } from '@/lib/auth';
 import { validateBody, applyRateLimit } from '@/lib/api-helpers';
 import { RATE_LIMITS } from '@/lib/rate-limit';
 import { z } from 'zod';
+import { createChildLogger } from '@/lib/logger';
 
 const RemoveMemberSchema = z.object({
   memberId: z.string().min(1, 'Member ID is required'),
 });
+const logger = createChildLogger({ service: 'api', route: '/api/circles/[id]/admin/remove-member' });
 
 export async function POST(
   request: NextRequest,
@@ -74,7 +76,7 @@ export async function POST(
       { status: 200 }
     );
   } catch (err) {
-    console.error('Remove member error:', err);
+    logger.error('Remove member error', { err });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

@@ -1,8 +1,10 @@
 import { Horizon } from '@stellar/stellar-sdk';
 import { prisma } from '@/lib/prisma';
+import { createChildLogger } from '@/lib/logger';
 
 // Initialize the Horizon server using your env variable
 const server = new Horizon.Server(process.env.NEXT_PUBLIC_STELLAR_HORIZON_URL!);
+const logger = createChildLogger({ service: 'lib', module: 'stellar-verify' });
 
 export async function verifyStellarTx(txHash: string, ajoId: string) {
   try {
@@ -22,7 +24,7 @@ export async function verifyStellarTx(txHash: string, ajoId: string) {
       });
     }
   } catch (error: any) {
-    console.error(`Verification failed for tx ${txHash}:`, error);
+    logger.error('Verification failed for Stellar transaction', { err: error, txHash, ajoId });
     
     // If the transaction isn't found (404), it might have dropped or failed
     if (error.response?.status === 404) {

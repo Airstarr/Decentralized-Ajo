@@ -13,6 +13,9 @@
  */
 
 import { prisma } from '@/lib/prisma';
+import { createChildLogger } from '@/lib/logger';
+
+const logger = createChildLogger({ service: 'lib', module: 'ajo-event-sync' });
 
 interface MemberJoinedEvent {
   /** The Circle/Ajo id (off-chain) */
@@ -40,7 +43,7 @@ export async function syncAjoMemberJoined({ ajoId, walletAddress, txHash }: Memb
   });
 
   if (!user) {
-    console.warn(`[ajo-event-sync] No user found for walletAddress ${walletAddress}. Skipping sync.`);
+    logger.warn('No user found for walletAddress. Skipping join sync.', { walletAddress, ajoId, txHash });
     return;
   }
 
@@ -60,7 +63,7 @@ export async function syncAjoMemberJoined({ ajoId, walletAddress, txHash }: Memb
     },
   });
 
-  console.info(`[ajo-event-sync] Confirmed participation for user ${user.id} in ajo ${ajoId} (tx: ${txHash})`);
+  logger.info('Confirmed ajo participation from on-chain join event', { userId: user.id, ajoId, txHash });
 }
 
 /**
@@ -73,7 +76,7 @@ export async function syncAjoMemberLeft({ ajoId, walletAddress, txHash }: Member
   });
 
   if (!user) {
-    console.warn(`[ajo-event-sync] No user found for walletAddress ${walletAddress}. Skipping sync.`);
+    logger.warn('No user found for walletAddress. Skipping leave sync.', { walletAddress, ajoId, txHash });
     return;
   }
 
@@ -86,5 +89,5 @@ export async function syncAjoMemberLeft({ ajoId, walletAddress, txHash }: Member
     },
   });
 
-  console.info(`[ajo-event-sync] Marked participation as EXITED for user ${user.id} in ajo ${ajoId} (tx: ${txHash})`);
+  logger.info('Marked ajo participation as exited from on-chain leave event', { userId: user.id, ajoId, txHash });
 }

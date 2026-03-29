@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
+import { createChildLogger } from '@/lib/logger';
 
 const prisma = new PrismaClient();
+const logger = createChildLogger({ service: 'api', route: '/api/user-ajos' });
 
 export async function GET(request: NextRequest) {
   try {
@@ -39,7 +41,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(ajos);
   } catch (error) {
-    console.error('Error fetching user ajos:', error);
+    logger.error('Error fetching user ajos', { err: error });
     return NextResponse.json(
       { error: 'Failed to fetch user ajos' },
       { status: 500 }
