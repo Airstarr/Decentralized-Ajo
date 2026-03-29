@@ -77,6 +77,23 @@ pub struct MemberStanding {
     pub is_active: bool,
 }
 
+// ---------------- EVENT TYPES ----------------
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct DepositedEvent {
+    pub member: Address,
+    pub amount: i128,
+    pub cycle_id: u32,
+}
+
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct WithdrawnEvent {
+    pub winner: Address,
+    pub amount: i128,
+    pub cycle_id: u32,
+}
+
 #[contracttype]
 pub enum DataKey {
     Circle,
@@ -559,10 +576,14 @@ impl AjoCircle {
         let token_client = token::Client::new(&env, &circle.token_address);
         token_client.transfer(&env.current_contract_address(), &member, &payout);
 
-        // Emit FundsWithdrawn event
+        // Emit structured Withdrawn event (topics: symbol + winner for indexed filtering)
         env.events().publish(
-            (symbol_short!("withdraw"), member.clone()),
-            (payout, cycle, circle.current_round, env.ledger().timestamp())
+            (symbol_short!("Withdrawn"), member.clone()),
+            WithdrawnEvent {
+                winner: member.clone(),
+                amount: payout,
+                cycle_id: cycle,
+            },
         );
 
         Ok(payout)
@@ -647,10 +668,14 @@ impl AjoCircle {
             env.storage().instance().set(&DataKey::Standings, &updated_standings);
         }
 
-        // Emit DepositReceived event
+        // Emit structured Deposited event (topics: symbol + member for indexed filtering)
         env.events().publish(
-            (symbol_short!("deposit"), member.clone()),
-            (circle.contribution_amount, circle.current_round, env.ledger().timestamp())
+            (symbol_short!("Deposited"), member.clone()),
+            DepositedEvent {
+                member: member.clone(),
+                amount: circle.contribution_amount,
+                cycle_id: circle.current_round,
+            },
         );
 
         Ok(())
