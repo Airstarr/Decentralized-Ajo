@@ -1,6 +1,9 @@
 #![no_std]
 
-use soroban_sdk::{contract, contractimpl, contracttype, Env, Address, Map, Vec};
+use soroban_sdk::{contract, contractimpl, contracttype, token, Env, Address, Map, Vec};
+
+#[cfg(test)]
+mod test;
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -35,9 +38,17 @@ pub struct MemberData {
 }
 
 #[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct FeeConfig {
+    pub treasury: Address,
+    pub fee_bps: u32,
+}
+
+#[contracttype]
 pub enum DataKey {
     Circle,
     Members,
+    FeeConfig,
 }
 
 #[contract]
@@ -45,6 +56,47 @@ pub struct AjoCircle;
 
 #[contractimpl]
 impl AjoCircle {
+    /// Set platform fee configuration. Only callable by the admin/organizer.
+    /// fee_bps is in basis points (e.g. 100 = 1%).
+    pub fn set_fee_config(
+        env: Env,
+        admin: Address,
+        treasury: Address,
+        fee_bps: u32,
+    ) -> Result<(), AjoError> {
+        admin.require_auth();
+
+        // Validate: fee cannot exceed 100% (10000 bps)
+        if fee_bps > 10_000 {
+            return Err(AjoError::InvalidInput);
+        }
+
+        // Ensure caller is the circle organizer
+        let circle: CircleData = env.storage()
+            .instance()
+            .get(&DataKey::Circle)
+            .ok_or(AjoError::NotFound)?;
+
+        if circle.organizer != admin {
+            return Err(AjoError::Unauthorized);
+        }
+
+        env.storage().instance().set(
+            &DataKey::FeeConfig,
+            &FeeConfig { treasury, fee_bps },
+        );
+
+        Ok(())
+    }
+
+    /// Calculate fee and net payout from a total pot.
+    /// Returns (fee, net_payout). Uses subtraction for net to avoid dust.
+    fn calculate_fee(total_pot: i128, fee_bps: u32) -> (i128, i128) {
+        let fee = (total_pot * fee_bps as i128) / 10_000_i128;
+        let net_payout = total_pot - fee;
+        (fee, net_payout)
+    }
+
     /// Initialize a new Ajo circle
     pub fn initialize_circle(
         env: Env,
@@ -153,8 +205,15 @@ impl AjoCircle {
         Ok(())
     }
 
-    /// Claim payout when it's a member's turn
-    pub fn claim_payout(env: Env, member: Address) -> Result<i128, AjoError> {
+    /// Claim payout when it's a member's turn.
+    /// If a fee config is set, deducts the platform fee and transfers it to
+    /// the treasury before sending the remainder to the recipient.
+    /// token_address: the Stellar asset contract address used for transfers.
+    pub fn claim_payout(
+        env: Env,
+        member: Address,
+        token_address: Address,
+    ) -> Result<i128, AjoError> {
         member.require_auth();
 
         let circle: CircleData = env.storage()
@@ -167,23 +226,41 @@ impl AjoCircle {
             .get(&DataKey::Members)
             .ok_or(AjoError::NotFound)?;
 
-        if let Some(mut member_data) = members.get(member.clone()) {
-            if member_data.has_received_payout {
-                return Err(AjoError::AlreadyPaid);
-            }
+        let mut member_data = members.get(member.clone()).ok_or(AjoError::NotFound)?;
 
-            let payout = (circle.member_count as i128) * circle.contribution_amount;
-
-            member_data.has_received_payout = true;
-            member_data.total_withdrawn += payout;
-
-            members.set(member, member_data);
-            env.storage().instance().set(&DataKey::Members, &members);
-
-            Ok(payout)
-        } else {
-            Err(AjoError::NotFound)
+        if member_data.has_received_payout {
+            return Err(AjoError::AlreadyPaid);
         }
+
+        let total_pot = (circle.member_count as i128) * circle.contribution_amount;
+
+        // Resolve fee config (optional — defaults to zero fee)
+        let fee_config: Option<FeeConfig> = env.storage().instance().get(&DataKey::FeeConfig);
+
+        let (fee, net_payout) = match &fee_config {
+            Some(cfg) => Self::calculate_fee(total_pot, cfg.fee_bps),
+            None => (0_i128, total_pot),
+        };
+
+        let token_client = token::Client::new(&env, &token_address);
+        let contract_addr = env.current_contract_address();
+
+        // Transfer fee to treasury (skip if zero to avoid unnecessary calls)
+        if fee > 0 {
+            if let Some(cfg) = &fee_config {
+                token_client.transfer(&contract_addr, &cfg.treasury, &fee);
+            }
+        }
+
+        // Transfer net payout to recipient
+        token_client.transfer(&contract_addr, &member, &net_payout);
+
+        member_data.has_received_payout = true;
+        member_data.total_withdrawn += total_pot; // record full pot as withdrawn
+        members.set(member, member_data);
+        env.storage().instance().set(&DataKey::Members, &members);
+
+        Ok(net_payout)
     }
 
     /// Perform a partial withdrawal with penalty
@@ -249,5 +326,10 @@ impl AjoCircle {
         }
 
         Ok(members_vec)
+    }
+
+    /// Get current fee configuration
+    pub fn get_fee_config(env: Env) -> Option<FeeConfig> {
+        env.storage().instance().get(&DataKey::FeeConfig)
     }
 }
