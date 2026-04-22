@@ -22,6 +22,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
 
-      - name: Run limit sync check
+      - name: Environment Check
+        run: ls -R
+
+      - name: Run Limit Sync Check
         run: node scripts/check-limit-sync.mjs
