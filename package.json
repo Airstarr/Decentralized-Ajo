@@ -12,6 +12,7 @@
     "start:server": "node server/dist/index.js",
     "lint": "eslint .",
     "test": "npm run test:contracts",
+    "test:e2e": "playwright test",
     "test:unit": "jest --runInBand",
     "test:api": "jest --runInBand --selectProjects api",
     "db:generate": "prisma generate",
@@ -106,6 +107,7 @@
   "devDependencies": {
     "@jest/types": "^30.3.0",
     "@nomicfoundation/hardhat-toolbox": "^7.0.0",
+    "@playwright/test": "^1.59.1",
     "@tailwindcss/postcss": "^4.2.0",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",

@@ -17,8 +17,6 @@ import { Users, PlusCircle, Wallet, TrendingUp, CircleDot, ArrowRight, Search, X
 import { ThemeToggle } from '@/components/theme-toggle';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
 import { CircleList } from '@/components/dashboard/circle-list';
 import { authenticatedFetch } from '@/lib/auth-client';
 import { formatAmount } from '@/lib/utils';
@@ -46,7 +44,7 @@ interface Circle {
 export default function Home() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  
+
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [circles, setCircles] = useState<Circle[]>([]);
   const [loading, setLoading] = useState(true);
@@ -77,7 +75,7 @@ export default function Home() {
     if (durationFilter !== 'ALL') params.set('duration', durationFilter);
     if (sortBy !== 'newest') params.set('sortBy', sortBy);
     if (currentPage > 1) params.set('page', String(currentPage));
-    
+
     const newUrl = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ''}`;
     router.replace(newUrl, { scroll: false });
   }, [debouncedSearchQuery, statusFilter, durationFilter, sortBy, currentPage, router]);
@@ -287,38 +285,38 @@ export default function Home() {
           {activeFiltersCount > 0 && (
             <div className="flex flex-wrap items-center gap-2 pt-2">
               <span className="text-sm text-muted-foreground">Active filters:</span>
-              
+
               {searchQuery && (
                 <Badge variant="secondary" className="gap-1">
                   Search: {searchQuery}
                   <X className="h-3 w-3 cursor-pointer ml-1" onClick={() => removeFilter('search')} />
                 </Badge>
               )}
-              
+
               {statusFilter !== 'ALL' && (
                 <Badge variant="secondary" className="gap-1">
                   Status: {statusFilter}
                   <X className="h-3 w-3 cursor-pointer ml-1" onClick={() => removeFilter('status')} />
                 </Badge>
               )}
-              
+
               {durationFilter !== 'ALL' && (
                 <Badge variant="secondary" className="gap-1">
                   Duration: {durationFilter}
                   <X className="h-3 w-3 cursor-pointer ml-1" onClick={() => removeFilter('duration')} />
                 </Badge>
               )}
-              
+
               {sortBy !== 'newest' && (
                 <Badge variant="secondary" className="gap-1">
-                  Sort: {sortBy === 'size_desc' ? 'Size: High to Low' : 
-                         sortBy === 'size_asc' ? 'Size: Low to High' :
-                         sortBy === 'name_asc' ? 'Name: A to Z' :
-                         sortBy === 'name_desc' ? 'Name: Z to A' : sortBy}
+                  Sort: {sortBy === 'size_desc' ? 'Size: High to Low' :
+                    sortBy === 'size_asc' ? 'Size: Low to High' :
+                      sortBy === 'name_asc' ? 'Name: A to Z' :
+                        sortBy === 'name_desc' ? 'Name: Z to A' : sortBy}
                   <X className="h-3 w-3 cursor-pointer ml-1" onClick={() => removeFilter('sort')} />
                 </Badge>
               )}
-              
+
               {activeFiltersCount > 1 && (
                 <Button variant="ghost" size="sm" onClick={clearAllFilters} className="text-xs h-7">
                   Clear all
