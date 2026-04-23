@@ -6,7 +6,7 @@
 export function makeRequest(
   method: string,
   url: string,
-  options: { body?: unknown; authHeader?: string } = {},
+  options: { body?: unknown; authHeader?: string; cookies?: Record<string, string> } = {},
 ): Request {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -17,9 +17,33 @@ export function makeRequest(
     headers['authorization'] = options.authHeader;
   }
 
-  return new Request(url, {
+  if (options.cookies) {
+    const cookieStr = Object.entries(options.cookies)
+      .map(([name, value]) => `${name}=${value}`)
+      .join('; ');
+    headers['cookie'] = cookieStr;
+  }
+
+  const req = new Request(url, {
     method,
     headers,
     body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
   });
+
+  // Next.js NextRequest uses a special cookies property.
+  // We mock it here for route handler tests.
+  if (options.cookies) {
+    (req as any).cookies = {
+      get: (name: string) => {
+        const value = options.cookies![name];
+        return value ? { name, value } : undefined;
+      },
+    };
+  } else {
+    (req as any).cookies = {
+      get: () => undefined,
+    };
+  }
+
+  return req;
 }

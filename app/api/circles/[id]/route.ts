@@ -19,7 +19,7 @@ export async function GET(
   const payload = verifyToken(token);
   if (!payload) return errorResponse(request, { code: 'invalid_token', message: 'Invalid or expired token' }, 401);
 
-  const rateLimited = applyRateLimit(request, RATE_LIMITS.api, 'circles:get', payload.userId);
+  const rateLimited = await applyRateLimit(request, RATE_LIMITS.api, 'circles:get', payload.userId);
   if (rateLimited) return rateLimited;
 
   try {

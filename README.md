@@ -112,6 +112,16 @@ Stellar Ajo includes robust wallet features for seamless Web3 interaction:
 └── scripts/                   # Utility scripts
 ```
 
+## Security
+
+### Authentication & Session Management
+- **Short-lived Access Tokens**: JWT access tokens have a short TTL (15 minutes) to minimize the window of opportunity for stolen tokens.
+- **Refresh Token Rotation**: Every time a refresh token is used, a new one is issued, and the old one is invalidated.
+- **Reuse Detection**: If an old refresh token is used, it indicates a potential replay attack. The system detects this and revokes the entire session family for that user, requiring a full re-authentication.
+- **HttpOnly Cookies**: Refresh tokens are stored in `HttpOnly`, `Secure`, and `SameSite: Lax` cookies to prevent XSS and mitigate CSRF risks.
+- **Password Hashing**: User passwords are securely hashed using `bcryptjs` with a salt factor of 10.
+- **Rate Limiting**: Critical authentication endpoints (login, register, refresh) are protected by rate limiting to prevent brute-force attacks.
+
 ## Setup Instructions
 
 ### Prerequisites
@@ -268,6 +278,9 @@ Authorization: Bearer <token>
 See [Detailed Documentation](./docs/TRANSACTION_HISTORY.md) for strategy and blockchain verification details.
 
 ## Smart Contract
+
+### Capability Matrix ✅
+Complete [Organizer vs Member authorization matrix](contracts/ajo-circle/README.md#organizer-vs-member-capability-matrix) with 100% test coverage for Unauthorized failures.
 
 ### Soroban Contract Features
 

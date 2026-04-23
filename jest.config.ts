@@ -32,6 +32,21 @@ const config: Config.InitialOptions = {
       moduleFileExtensions: ['ts', 'js', 'json', 'node'],
       clearMocks: true,
     },
+    // Real-DB Integration tests
+    {
+      displayName: 'integration',
+      testMatch: ['<rootDir>/__tests__/api/integration/**/*.test.[jt]s'],
+      transform: {
+        '^.+\\.[tj]sx?$': ['ts-jest', { tsconfig: '<rootDir>/__tests__/tsconfig.json' }],
+      },
+      testEnvironment: 'node',
+      setupFilesAfterEnv: ['<rootDir>/__tests__/api/setup.ts'],
+      moduleNameMapper: {
+        '^@/(.*)$': '<rootDir>/$1',
+      },
+      moduleFileExtensions: ['ts', 'js', 'json', 'node'],
+      clearMocks: false, // Don't clear mocks automatically so we can control them
+    },
   ],
   collectCoverage: true,
   coverageDirectory: 'coverage',

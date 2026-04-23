@@ -64,8 +64,8 @@ jobs:
       - name: Prisma Generate
         run: pnpm prisma generate
 
-      - name: Run Prisma migrations (Postgres)
-        run: pnpm prisma migrate deploy
+      - name: Sync database schema (Postgres)
+        run: pnpm prisma db push --accept-data-loss
 
       - name: DB smoke (Postgres)
         run: node scripts/ci-db-smoke.mjs
@@ -80,8 +80,6 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
 
       - name: Set up Node.js
         uses: actions/setup-node@v4

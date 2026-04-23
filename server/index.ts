@@ -4,6 +4,7 @@ import helmet from 'helmet';
 import { createChildLogger } from './config/logger';
 import { requestLogger } from './middleware/requestLogger';
 import { startAjoCycleCronJob } from './services/ajo-cycle-cron';
+import { startDeadlineReminderCronJob } from './services/deadline-reminder-cron';
 
 const app = express();
 const logger = createChildLogger({ service: 'express', module: 'server-index' });
@@ -86,6 +87,7 @@ app.listen(PORT, () => {
   logger.info(`Environment: ${process.env.NODE_ENV || 'development'}`);
   logger.info(`Log level: ${logger.level}`);
   startAjoCycleCronJob();
+  startDeadlineReminderCronJob();
 });
 
 export default app;

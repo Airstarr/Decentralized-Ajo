@@ -43,6 +43,7 @@ model User {
   withdrawals Withdrawal[]
   refreshTokens RefreshToken[]
   notifications Notification[]
+  deadlineReminders DeadlineReminder[]
   
   // New Ajo Group Relations
   ajos          UserAjo[]
@@ -68,8 +69,11 @@ model RefreshToken {
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   expiresAt DateTime
+  rotatedAt DateTime?
+  familyId  String   @default(cuid())
 
   @@index([userId])
+  @@index([familyId])
 }
 
 model Circle {
@@ -103,6 +107,7 @@ model Circle {
   governance GovernanceProposal[]
   withdrawals Withdrawal[]
   ajoParticipants UserAjoParticipation[] @relation("ajoParticipants")
+  deadlineReminders DeadlineReminder[]
 
   @@index([organizerId])
   @@index([status])
@@ -365,6 +370,23 @@ model Notification {
 
   @@index([userId])
   @@index([userId, read])
+}
+
+model DeadlineReminder {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  circleId  String
+  circle    Circle   @relation(fields: [circleId], references: [id], onDelete: Cascade)
+
+  round     Int
+  leadTimeHours Int
+  notifiedAt DateTime @default(now())
+
+  @@unique([userId, circleId, round, leadTimeHours])
+  @@index([userId])
+  @@index([circleId])
+  @@index([circleId, round])
 }
 
 enum NotificationType {

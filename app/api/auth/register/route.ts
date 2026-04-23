@@ -17,7 +17,7 @@ import { createChildLogger } from '@/lib/logger';
 const logger = createChildLogger({ service: 'api', route: '/api/auth/register' });
 
 export async function POST(request: NextRequest) {
-  const rateLimited = applyRateLimit(request, RATE_LIMITS.auth, 'auth:register');
+  const rateLimited = await applyRateLimit(request, RATE_LIMITS.auth, 'auth:register');
   if (rateLimited) return rateLimited;
 
   const { data, error } = await validateBody(request, RegisterSchema);

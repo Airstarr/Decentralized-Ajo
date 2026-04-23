@@ -24,7 +24,7 @@ export async function POST(
   if (!payload) return NextResponse.json({ error: 'Invalid or expired token' }, { status: 401 });
 
   // ── Rate limit ────────────────────────────────────────────────────────────
-  const rateLimited = applyRateLimit(request, RATE_LIMITS.api, 'ajos:join', payload.userId);
+  const rateLimited = await applyRateLimit(request, RATE_LIMITS.sensitive, 'ajos:join', payload.userId);
   if (rateLimited) return rateLimited;
 
   try {

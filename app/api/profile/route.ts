@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
   const payload = verifyToken(token);
   if (!payload) return NextResponse.json({ error: 'Invalid or expired token' }, { status: 401 });
 
-  const rateLimited = applyRateLimit(request, RATE_LIMITS.api, 'profile-get', payload.userId);
+  const rateLimited = await applyRateLimit(request, RATE_LIMITS.api, 'profile:get', payload.userId);
   if (rateLimited) return rateLimited;
 
   try {
@@ -45,42 +45,66 @@ export async function GET(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   const token = extractToken(request.headers.get('authorization'));
-  if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  let payload = token ? verifyToken(token) : null;
 
-  const payload = verifyToken(token);
-  if (!payload) return NextResponse.json({ error: 'Invalid or expired token' }, { status: 401 });
+  const userAddress = request.headers.get('x-wallet-address');
+  
+  if (!payload && !userAddress) {
+    return NextResponse.json({ error: 'Unauthorized - missing token or wallet address' }, { status: 401 });
+  }
 
-  const rateLimited = applyRateLimit(request, RATE_LIMITS.api, 'profile-update', payload.userId);
+  let userIdOrAddress = payload ? payload.userId : userAddress;
+  const rateKey = payload ? payload.userId : `wallet:${userAddress}`;
+  const rateLimited = applyRateLimit(request, RATE_LIMITS.api, 'profile-update', rateKey);
   if (rateLimited) return rateLimited;
 
-  const { data, error } = await validateBody(request, UpdateProfileSchema);
-  if (error) return error;
+  const body = await request.json();
+  const { username, email } = body;
+  if (username === undefined || email === undefined) {
+    return NextResponse.json({ error: 'Missing username or email' }, { status: 400 });
+  }
+
+  // Validate using subset of schema
+  const partialData = { username, email };
+  const validation = UpdateProfileSchema.partial().safeParse(partialData);
+  if (!validation.success) {
+    return NextResponse.json({ error: validation.error.errors[0].message }, { status: 400 });
+  }
+
+  const validatedData = {
+    username: username.trim() === '' ? null : username.trim(),
+    email: email.trim().toLowerCase(),
+  };
 
   try {
-    const user = await prisma.user.update({
-      where: { id: payload.userId },
-      data: {
-        ...(data.email !== undefined && { email: data.email.trim().toLowerCase() }),
-        ...(data.username !== undefined && {
-          username: data.username.trim() === '' ? null : data.username.trim(),
-        }),
-        ...(data.firstName !== undefined && { firstName: data.firstName.trim() }),
-        ...(data.lastName !== undefined && { lastName: data.lastName.trim() }),
-        ...(data.notificationEmail !== undefined && {
-          notificationEmail: data.notificationEmail.trim() === '' ? null : data.notificationEmail.trim(),
-        }),
-        ...(data.bio !== undefined && { bio: data.bio }),
-        ...(data.phoneNumber !== undefined && { phoneNumber: data.phoneNumber }),
-      },
-      select: USER_SELECT,
-    });
+    let user;
+    if (payload) {
+      // Existing token flow
+      user = await prisma.user.update({
+        where: { id: payload.userId },
+        data: validatedData,
+        select: USER_SELECT,
+      });
+    } else {
+      // Wallet upsert flow
+      user = await prisma.user.upsert({
+        where: { address: userAddress! },
+        update: validatedData,
+        create: { 
+          address: userAddress!,
+          username: validatedData.username!,
+          email: validatedData.email!,
+        },
+        select: { id: true, address: true, username: true, email: true },
+      });
+    }
 
     return NextResponse.json({ success: true, user });
-  } catch (err) {
-    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
-      return NextResponse.json({ error: 'That username or email is already taken' }, { status: 409 });
+  } catch (err: any) {
+    if (err.code === 'P2002') {
+      return NextResponse.json({ error: 'Username or email already taken' }, { status: 409 });
     }
-    logger.error('Update profile error', { err, userId: payload.userId });
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    logger.error('Update profile error', { err, userId: userIdOrAddress });
+    return NextResponse.json({ error: 'Database mutation failed' }, { status: 500 });
   }
 }

@@ -13,7 +13,7 @@ const allowedOrigins: ReadonlySet<string> = new Set(
   ].filter(Boolean) as string[],
 );
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const requestId = crypto.randomUUID();
   const startTime = Date.now();
   const { method, nextUrl } = request;
@@ -50,7 +50,7 @@ export function middleware(request: NextRequest) {
     const prefix = isAuthRoute ? 'auth' : 'api';
     
     const limitKey = getRateLimitKey(prefix, ip);
-    const limitResult = checkRateLimit(limitKey, config);
+    const limitResult = await checkRateLimit(limitKey, config);
 
     if (limitResult) {
       console.warn(JSON.stringify({ 

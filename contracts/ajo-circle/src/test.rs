@@ -930,6 +930,162 @@ fn test_revoke_role_by_non_deployer_fails() {
 
 // ─── emergency_panic ──────────────────────────────────────────────────────────
 
+// ─── AUTHORIZATION NEGATIVE TESTS (Capability Matrix Coverage) ─────────────────
+
+// Test suite verifying all privileged entrypoints reject unauthorized callers with
+// AjoError::Unauthorized where specified in capability matrix.
+
+#[test]
+fn test_panic_by_member_fails_unauthorized() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, _tok, _organizer, user_a, _b) = setup(&env, 100, 5);
+
+    // Regular member cannot panic
+    let result = client.panic(&user_a);
+    assert_eq!(result, Err(AjoError::Unauthorized));
+}
+
+#[test]
+fn test_resume_by_member_fails_unauthorized() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, _tok, organizer, user_a, _b) = setup(&env, 100, 5);
+
+    client.panic(&organizer).unwrap();
+    // Regular member cannot resume
+    let result = client.resume(&user_a);
+    assert_eq!(result, Err(AjoError::Unauthorized));
+}
+
+#[test]
+fn test_join_circle_by_non_organizer_fails_unauthorized() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, _tok, _organizer, user_a, user_b) = setup(&env, 100, 5);
+
+    // Only organizer can add members
+    let result = client.join_circle(&user_a, &user_b);
+    assert_eq!(result, Err(AjoError::Unauthorized));
+}
+
+#[test]
+fn test_emergency_panic_by_member_fails_unauthorized() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, _tok, _organizer, user_a, _b) = setup(&env, 100, 5);
+
+    // Only deployer can emergency panic
+    let result = client.emergency_panic(&user_a);
+    assert_eq!(result, Err(AjoError::Unauthorized));
+}
+
+#[test]
+fn test_boot_dormant_member_by_member_fails_unauthorized() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, _tok, _organizer, user_a, user_b) = setup_with_members(&env);
+
+    // Only admin can boot members
+    let result = client.boot_dormant_member(&user_a, &user_b);
+    assert_eq!(result, Err(AjoError::Unauthorized));
+}
+
+#[test]
+fn test_slash_member_by_member_fails_unauthorized() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, _tok, _organizer, user_a, user_b) = setup_with_members(&env);
+
+    // Only admin can slash
+    let result = client.slash_member(&user_a, &user_b);
+    assert_eq!(result, Err(AjoError::Unauthorized));
+}
+
+#[test]
+fn test_shuffle_rotation_by_member_fails_unauthorized() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, _tok, _organizer, user_a, _b) = setup_with_members(&env);
+
+    // Only admin can shuffle
+    let result = client.shuffle_rotation(&user_a);
+    assert_eq!(result, Err(AjoError::Unauthorized));
+}
+
+#[test]
+fn test_set_kyc_status_by_member_fails_unauthorized() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, _tok, _organizer, user_a, user_b) = setup_with_members(&env);
+
+    // Only admin can set KYC
+    let result = client.set_kyc_status(&user_a, &user_b, &true);
+    assert_eq!(result, Err(AjoError::Unauthorized));
+}
+
+#[test]
+fn test_grant_role_by_member_fails_unauthorized() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, _tok, _organizer, user_a, user_b) = setup(&env, 100, 5);
+
+    // Only deployer can grant roles
+    let result = client.grant_role(&user_a, &symbol_short!("ADMIN"), &user_b);
+    assert_eq!(result, Err(AjoError::Unauthorized));
+}
+
+#[test]
+fn test_revoke_role_by_member_fails_unauthorized() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, _tok, _organizer, user_a, user_b) = setup(&env, 100, 5);
+
+    // Only deployer can revoke roles
+    let result = client.revoke_role(&user_a, &symbol_short!("ADMIN"), &user_b);
+    assert_eq!(result, Err(AjoError::Unauthorized));
+}
+
+// Role distinction: Admin cannot emergency_panic (deployer only)
+#[test]
+fn test_admin_cannot_emergency_panic_deployer_only() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, _tok, organizer, admin, _b) = setup(&env, 100, 5);
+    
+    // Grant admin role to separate address
+    client.grant_role(&organizer, &symbol_short!("ADMIN"), &admin).unwrap();
+    
+    // Admin cannot emergency_panic
+    let result = client.emergency_panic(&admin);
+    assert_eq!(result, Err(AjoError::Unauthorized));
+}
+
+// Verify deposit requires member auth (fails NotFound for stranger, but auth checked)
+#[test]
+fn test_deposit_by_stranger_fails_notfound() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, _tok, _organizer, _a, _b) = setup(&env, 100, 5);
+    let stranger = Address::generate(&env);
+
+    let result = client.deposit(&stranger);
+    assert_eq!(result, Err(AjoError::NotFound));
+}
+
+
 #[test]
 fn test_emergency_panic_by_deployer_pauses_contract() {
     let env = Env::default();

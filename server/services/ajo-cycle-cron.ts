@@ -1,7 +1,7 @@
 import cron from 'node-cron';
 import { prisma } from '@/lib/prisma';
 import { sendPayoutAlert } from '@/lib/email';
-import logger from '../config/logger';
+import { createChildLogger } from '../config/logger';
 
 const CRON_SCHEDULE = '0 * * * *';
 const logger = createChildLogger({ service: 'express', module: 'ajo-cycle-cron' });

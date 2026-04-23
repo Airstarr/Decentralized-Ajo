@@ -17,7 +17,7 @@ export async function GET(
   const payload = verifyToken(token);
   if (!payload) return NextResponse.json({ error: 'Invalid or expired token' }, { status: 401 });
 
-  const rateLimited = applyRateLimit(request, RATE_LIMITS.api, 'circles:join-preview', payload.userId);
+  const rateLimited = await applyRateLimit(request, RATE_LIMITS.api, 'circles:join-preview', payload.userId);
   if (rateLimited) return rateLimited;
 
   try {
@@ -62,7 +62,7 @@ export async function POST(
   const payload = verifyToken(token);
   if (!payload) return NextResponse.json({ error: 'Invalid or expired token' }, { status: 401 });
 
-  const rateLimited = applyRateLimit(request, RATE_LIMITS.api, 'circles:join', payload.userId);
+  const rateLimited = await applyRateLimit(request, RATE_LIMITS.sensitive, 'circles:join', payload.userId);
   if (rateLimited) return rateLimited;
 
   try {

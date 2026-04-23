@@ -12,7 +12,7 @@ import { authenticatedFetch } from '@/lib/auth-client';
 import { useWallet } from '@/lib/wallet-context';
 import { ProposalCard } from '@/components/governance/proposal-card';
 import { CreateProposalDialog } from '@/components/governance/create-proposal-dialog';
-import { NoProposalsEmpty } from '@/components/ui/empty-states';
+import { GovernanceSkeleton } from '@/components/skeletons';
 
 type StatusFilter = 'ALL' | 'ACTIVE' | 'PASSED' | 'REJECTED';
 
@@ -138,13 +138,7 @@ export default function GovernancePage() {
   ];
 
   if (loading) {
-    return (
-      <main className="min-h-screen bg-background">
-        <div className="container mx-auto px-4 py-12 text-center">
-          <p className="text-muted-foreground">Loading governance proposals...</p>
-        </div>
-      </main>
-    );
+    return <GovernanceSkeleton />;
   }
 
   return (
@@ -154,7 +148,7 @@ export default function GovernancePage() {
         <div className="container mx-auto px-4 py-6">
           <Link
             href={`/circles/${circleId}`}
-            className="inline-flex items-center text-primary hover:underline mb-4 min-h-[44px] -ml-2 px-2 w-fit"
+            className="flex items-center text-primary hover:underline mb-4"
           >
             <ArrowLeft className="mr-2 h-4 w-4" />
             Back to Circle
@@ -185,8 +179,9 @@ export default function GovernancePage() {
             <Button
               key={filter.value}
               variant={statusFilter === filter.value ? 'default' : 'outline'}
+              size="sm"
               onClick={() => setStatusFilter(filter.value)}
-              className="text-xs min-h-[44px]"
+              className="text-xs"
             >
               {filter.label}
               {filter.value !== 'ALL' && (
@@ -202,7 +197,19 @@ export default function GovernancePage() {
 
         {/* Proposals Grid */}
         {filteredProposals.length === 0 ? (
-          <NoProposalsEmpty statusFilter={statusFilter} />
+          <Card>
+            <CardContent className="py-16 text-center">
+              <ShieldCheck className="h-12 w-12 text-muted-foreground/30 mx-auto mb-4" />
+              <h3 className="text-lg font-semibold text-foreground mb-2">
+                {statusFilter === 'ALL' ? 'No proposals yet' : `No ${statusFilter.toLowerCase()} proposals`}
+              </h3>
+              <p className="text-muted-foreground text-sm max-w-md mx-auto">
+                {statusFilter === 'ALL'
+                  ? 'Create the first governance proposal to get started. Circle members can then vote on it.'
+                  : `There are no proposals with status "${statusFilter}" at the moment.`}
+              </p>
+            </CardContent>
+          </Card>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredProposals.map((proposal) => (
