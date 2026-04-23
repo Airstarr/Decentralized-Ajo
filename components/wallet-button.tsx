@@ -16,7 +16,16 @@ import { Wallet, Copy, LogOut } from 'lucide-react';
 import { toast } from 'sonner';
 
 export function WalletButton() {
-  const { walletAddress, isConnected, isLoading, walletNetwork, networkMismatch, connectWallet, disconnectWallet } = useWallet();
+  const { 
+    walletAddress, 
+    isConnected, 
+    isLoading, 
+    walletNetwork, 
+    networkMismatch, 
+    connectWallet, 
+    disconnectWallet,
+    error 
+  } = useWallet();
   const [copied, setCopied] = useState(false);
 
   const handleCopyAddress = () => {
@@ -29,6 +38,21 @@ export function WalletButton() {
   };
 
   if (!isConnected) {
+    if (error?.type === 'NOT_INSTALLED') {
+      return (
+        <Button
+          asChild
+          variant="default"
+          className="bg-primary text-primary-foreground hover:bg-primary/90"
+        >
+          <a href={error.cta?.href} target="_blank" rel="noopener noreferrer">
+            <Wallet className="mr-2 h-4 w-4" />
+            Install Freighter
+          </a>
+        </Button>
+      );
+    }
+
     return (
       <Button
         onClick={connectWallet}

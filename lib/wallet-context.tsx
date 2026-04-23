@@ -11,6 +11,8 @@ import {
 } from './stellar-config';
 import { authenticatedFetch } from './auth-client';
 import * as StellarSdk from '@stellar/stellar-sdk';
+import { toast } from 'sonner';
+import { mapWalletError, type WalletErrorInfo } from './wallet-errors';
 
 interface SignAndSubmitResult {
   hash: string;
@@ -22,7 +24,7 @@ interface WalletContextType {
   walletAddress: string | null;
   isConnected: boolean;
   isLoading: boolean;
-  error: string | null;
+  error: WalletErrorInfo | null;
   /** Network the wallet extension is currently set to (null = unknown / not connected). */
   walletNetwork: StellarNetworkName | null;
   /** True when the wallet's network differs from the app's configured network. */
@@ -47,9 +49,40 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
   const [publicKey, setPublicKey] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<WalletErrorInfo | null>(null);
   const [walletNetwork, setWalletNetwork] = useState<StellarNetworkName | null>(null);
   const [mismatchDismissed, setMismatchDismissed] = useState(false);
+
+  // Toast errors whenever they occur
+  useEffect(() => {
+    if (error) {
+      toast.error(error.title, {
+        description: (
+          <div className="mt-1 space-y-2">
+            <p className="text-sm">{error.message}</p>
+            {error.recoveryStep && (
+              <p className="text-xs text-muted-foreground italic">
+                {error.recoveryStep}
+              </p>
+            )}
+            {error.cta && (
+              <div className="mt-2">
+                <a
+                  href={error.cta.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs font-medium text-primary hover:underline underline-offset-4"
+                >
+                  {error.cta.label}
+                </a>
+              </div>
+            )}
+          </div>
+        ),
+        duration: 5000,
+      });
+    }
+  }, [error]);
 
   /** Read the active passphrase from Freighter and update walletNetwork state. */
   const refreshWalletNetwork = useCallback(async () => {
@@ -166,9 +199,8 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         }
       }
     } catch (err) {
-      const errorMessage =
-        err instanceof Error ? err.message : 'Failed to connect wallet';
-      setError(errorMessage);
+      const walletError = mapWalletError(err);
+      setError(walletError);
       console.error('Wallet connection error:', err);
     } finally {
       setIsLoading(false);
@@ -201,9 +233,8 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
 
       return signedXdr;
     } catch (err) {
-      const errorMessage =
-        err instanceof Error ? err.message : 'Failed to sign transaction';
-      setError(errorMessage);
+      const walletError = mapWalletError(err);
+      setError(walletError);
       throw err;
     }
   };
@@ -263,9 +294,8 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       // Timeout reached
       throw new Error('Transaction confirmation timeout');
     } catch (err) {
-      const errorMessage =
-        err instanceof Error ? err.message : 'Transaction failed';
-      setError(errorMessage);
+      const walletError = mapWalletError(err);
+      setError(walletError);
       throw err;
     }
   };

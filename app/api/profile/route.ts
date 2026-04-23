@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import crypto from 'crypto';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { verifyToken, extractToken } from '@/lib/auth';
@@ -71,7 +72,7 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: validation.error.errors[0].message }, { status: 400 });
   }
 
-  const validatedData = {
+  const validatedData: any = {
     username: username.trim() === '' ? null : username.trim(),
     email: email.trim().toLowerCase(),
   };
@@ -79,12 +80,50 @@ export async function PUT(request: NextRequest) {
   try {
     let user;
     if (payload) {
-      // Existing token flow
-      user = await prisma.user.update({
+      // Check if email is changing
+      const currentUser = await prisma.user.findUnique({
         where: { id: payload.userId },
-        data: validatedData,
-        select: USER_SELECT,
+        select: { email: true },
       });
+
+      if (currentUser && currentUser.email !== validatedData.email) {
+        // Email is changing, unverify and prepare for new verification
+        validatedData.emailVerifiedAt = null;
+        validatedData.verified = false;
+        
+        // We could also trigger a new verification email here, 
+        // but for now we'll just unverify and let the user request a resend or handled by a background process.
+        // Actually, let's trigger it.
+        const verificationToken = crypto.randomBytes(32).toString('hex');
+        const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+        await prisma.$transaction([
+          prisma.user.update({
+            where: { id: payload.userId },
+            data: validatedData,
+          }),
+          prisma.verificationToken.deleteMany({ where: { userId: payload.userId } }),
+          prisma.verificationToken.create({
+            data: {
+              token: verificationToken,
+              userId: payload.userId,
+              expiresAt,
+            },
+          }),
+        ]);
+
+        const { sendVerificationEmail } = await import('@/lib/email');
+        sendVerificationEmail(validatedData.email, verificationToken).catch(err => {
+          logger.error('Failed to send verification email after email change', { err, userId: payload.userId });
+        });
+      } else {
+        // Existing token flow
+        user = await prisma.user.update({
+          where: { id: payload.userId },
+          data: validatedData,
+          select: USER_SELECT,
+        });
+      }
     } else {
       // Wallet upsert flow
       user = await prisma.user.upsert({

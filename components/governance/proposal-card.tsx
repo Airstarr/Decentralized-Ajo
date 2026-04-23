@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -105,10 +106,25 @@ export function ProposalCard({ proposal, onVote, isWalletConnected }: ProposalCa
   const canVote = proposal.status === 'ACTIVE' && !proposal.userVote && !isExpired && isWalletConnected;
 
   const handleSubmitVote = async () => {
-    if (!selectedVote) return;
+    if (!selectedVote || isSubmitting) return;
     setIsSubmitting(true);
+    
+    // Set a timeout for the request as per acceptance criteria (>5s)
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Request timed out. Please try again.')), 5000)
+    );
+
     try {
-      await onVote(proposal.id, selectedVote);
+      await Promise.race([
+        onVote(proposal.id, selectedVote),
+        timeoutPromise
+      ]);
+    } catch (error: any) {
+      console.error('Vote error:', error);
+      if (error.message === 'Request timed out. Please try again.') {
+        toast.error(error.message);
+      }
+      // Other errors are handled by the parent's onVote/handleVote
     } finally {
       setIsSubmitting(false);
     }
