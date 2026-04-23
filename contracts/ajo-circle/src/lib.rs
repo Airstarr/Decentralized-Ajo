@@ -112,8 +112,6 @@ pub struct MemberData {
 }
 
 /// Circle lifecycle status
-///
-/// Represents the current operational state of the circle.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum CircleStatus {
@@ -128,8 +126,6 @@ pub enum CircleStatus {
 }
 
 /// Tracks an in-progress dissolution vote
-///
-/// Stores voting state during the dissolution process.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DissolutionVote {
@@ -142,8 +138,6 @@ pub struct DissolutionVote {
 }
 
 /// Member standing and activity tracking
-///
-/// Monitors member participation and eligibility status.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct MemberStanding {
@@ -178,6 +172,8 @@ pub enum DataKey {
     Deployer,
     FeeConfig,
 }
+
+const HARD_CAP: u32 = 100;
 
 #[contract]
 pub struct AjoCircle;
@@ -227,7 +223,8 @@ impl AjoCircle {
     }
 
     fn is_paused(env: &Env) -> bool {
-        env.storage().instance().get(&DataKey::CircleStatus).unwrap_or(false)
+        let status: CircleStatus = env.storage().instance().get(&DataKey::CircleStatus).unwrap_or(CircleStatus::Active);
+        status == CircleStatus::Panicked
     }
 
     fn require_not_paused(env: &Env) -> Result<(), AjoError> {
@@ -294,7 +291,6 @@ impl AjoCircle {
         // Ã¢â€â‚¬Ã¢â€â‚¬ CHECKS Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
         Self::require_not_paused(&env)?;
         member.require_auth();
-
 
         let circle: CircleData = env
             .storage()
@@ -382,8 +378,8 @@ impl AjoCircle {
         token_client.transfer(&env.current_contract_address(), &member, &payout);
 
         env.events().publish(
-            (symbol_short!("withdraw"), member.clone()),
-            (payout, cycle, circle.current_round, env.ledger().timestamp()),
+            (symbol_short!("withdraw"), member.clone(), env.current_contract_address()),
+            (payout, cycle, circle.current_round)
         );
 
         Ok(payout)
@@ -393,11 +389,249 @@ impl AjoCircle {
         Self::claim_payout(env, member, cycle)
     }
 
+    /// Emergency partial withdrawal: exit the circle with a penalty.
+    pub fn partial_withdraw(env: Env, member: Address) -> Result<i128, AjoError> {
+        Self::require_not_paused(&env)?;
+        member.require_auth();
+
+        let circle: CircleData = env
+            .storage()
+            .instance()
+            .get(&DataKey::Circle)
+            .ok_or(AjoError::NotFound)?;
+
+        let mut members: Map<Address, MemberData> = env
+            .storage()
+            .instance()
+            .get(&DataKey::Members)
+            .ok_or(AjoError::NotFound)?;
+
+        let mut member_data = members.get(member.clone()).ok_or(AjoError::NotFound)?;
+
+        if member_data.total_contributed <= member_data.total_withdrawn {
+            return Err(AjoError::InsufficientFunds);
+        }
+
+        let net_contributed = member_data.total_contributed - member_data.total_withdrawn;
+        let penalty = (net_contributed as u128 * WITHDRAWAL_PENALTY_PERCENT as u128 / 100) as i128;
+        let refund = net_contributed - penalty;
+
+        member_data.total_withdrawn += refund;
+        member_data.status = 2; // Exited
+        members.set(member.clone(), member_data);
+        env.storage().instance().set(&DataKey::Members, &members);
+
+        let pool: i128 = env.storage().instance().get(&DataKey::TotalPool).unwrap_or(0);
+        let new_pool = pool.checked_sub(refund).ok_or(AjoError::ArithmeticOverflow)?;
+        env.storage().instance().set(&DataKey::TotalPool, &new_pool);
+
+        let token_client = token::Client::new(&env, &circle.token_address);
+        token_client.transfer(&env.current_contract_address(), &member, &refund);
+
+        env.events().publish(
+            (symbol_short!("withdraw"), member.clone(), env.current_contract_address()),
+            (refund, circle.current_round)
+        );
+
+        Ok(refund)
+    }
+
+    // ---------------- GOVERNANCE ----------------
+
+    pub fn start_dissolution_vote(env: Env, caller: Address, threshold_mode: u32) -> Result<(), AjoError> {
+        caller.require_auth();
+
+        let status: CircleStatus = env
+            .storage()
+            .instance()
+            .get(&DataKey::CircleStatus)
+            .unwrap_or(CircleStatus::Active);
+
+        if status != CircleStatus::Active {
+            return Err(AjoError::VoteAlreadyActive);
+        }
+
+        let circle: CircleData = env
+            .storage()
+            .instance()
+            .get(&DataKey::Circle)
+            .ok_or(AjoError::NotFound)?;
+
+        let vote = DissolutionVote {
+            votes_for: 0,
+            total_members: circle.member_count,
+            threshold_mode,
+        };
+
+        env.storage().instance().set(&DataKey::CircleStatus, &CircleStatus::VotingForDissolution);
+        env.storage().instance().set(&DataKey::CycleWithdrawals, &vote); // Reuse key for vote tracking
+
+        env.events().publish(
+            (symbol_short!("dissolve"), symbol_short!("start"), env.current_contract_address()),
+            (threshold_mode, env.ledger().timestamp())
+        );
+
+        Ok(())
+    }
+
+    pub fn vote_to_dissolve(env: Env, member: Address) -> Result<(), AjoError> {
+        member.require_auth();
+
+        let mut status: CircleStatus = env
+            .storage()
+            .instance()
+            .get(&DataKey::CircleStatus)
+            .ok_or(AjoError::NotFound)?;
+
+        if status != CircleStatus::VotingForDissolution {
+            return Err(AjoError::NoActiveVote);
+        }
+
+        let mut vote: DissolutionVote = env
+            .storage()
+            .instance()
+            .get(&DataKey::CycleWithdrawals)
+            .ok_or(AjoError::NoActiveVote)?;
+
+        // Track who voted to prevent double voting
+        let mut voted_members: Vec<Address> = env
+            .storage()
+            .instance()
+            .get(&DataKey::VotedMembers)
+            .unwrap_or_else(|| Vec::new(&env));
+        
+        for i in 0..voted_members.len() {
+            if voted_members.get(i).unwrap() == member {
+                return Err(AjoError::AlreadyVoted);
+            }
+        }
+
+        voted_members.push_back(member.clone());
+        env.storage().instance().set(&DataKey::VotedMembers, &voted_members);
+
+        vote.votes_for += 1;
+        
+        let threshold_met = if vote.threshold_mode == 0 {
+            vote.votes_for * 2 > vote.total_members
+        } else {
+            vote.votes_for * 100 > vote.total_members * 66
+        };
+
+        if threshold_met {
+            status = CircleStatus::Dissolved;
+            env.storage().instance().set(&DataKey::CircleStatus, &status);
+            
+            env.events().publish(
+                (symbol_short!("dissolve"), symbol_short!("passed"), env.current_contract_address()),
+                env.ledger().timestamp()
+            );
+        } else {
+            env.storage().instance().set(&DataKey::CycleWithdrawals, &vote);
+        }
+
+        env.events().publish(
+            (symbol_short!("vote_cast"), member.clone(), env.current_contract_address()),
+            (1u32, vote.votes_for) // 1 = YES
+        );
+
+        Ok(())
+    }
+
+    pub fn dissolve_and_refund(env: Env, member: Address) -> Result<i128, AjoError> {
+        member.require_auth();
+
+        let status: CircleStatus = env
+            .storage()
+            .instance()
+            .get(&DataKey::CircleStatus)
+            .ok_or(AjoError::NotFound)?;
+
+        if status != CircleStatus::Dissolved {
+            return Err(AjoError::CircleNotActive);
+        }
+
+        let circle: CircleData = env
+            .storage()
+            .instance()
+            .get(&DataKey::Circle)
+            .ok_or(AjoError::NotFound)?;
+
+        let mut members: Map<Address, MemberData> = env
+            .storage()
+            .instance()
+            .get(&DataKey::Members)
+            .ok_or(AjoError::NotFound)?;
+
+        let mut member_data = members.get(member.clone()).ok_or(AjoError::NotFound)?;
+
+        if member_data.total_contributed <= member_data.total_withdrawn {
+            return Err(AjoError::InsufficientFunds);
+        }
+
+        let refund = member_data.total_contributed - member_data.total_withdrawn;
+        
+        member_data.total_withdrawn += refund;
+        members.set(member.clone(), member_data);
+        env.storage().instance().set(&DataKey::Members, &members);
+
+        let token_client = token::Client::new(&env, &circle.token_address);
+        token_client.transfer(&env.current_contract_address(), &member, &refund);
+
+        env.events().publish(
+            (symbol_short!("withdraw"), member.clone(), env.current_contract_address()),
+            (refund, circle.current_round)
+        );
+
+        Ok(refund)
+    }
+
+    pub fn emergency_refund(env: Env, member: Address) -> Result<i128, AjoError> {
+        member.require_auth();
+
+        if !Self::is_paused(&env) {
+            return Err(AjoError::CircleNotActive);
+        }
+
+        let circle: CircleData = env
+            .storage()
+            .instance()
+            .get(&DataKey::Circle)
+            .ok_or(AjoError::NotFound)?;
+
+        let mut members: Map<Address, MemberData> = env
+            .storage()
+            .instance()
+            .get(&DataKey::Members)
+            .ok_or(AjoError::NotFound)?;
+
+        let mut member_data = members.get(member.clone()).ok_or(AjoError::NotFound)?;
+
+        if member_data.total_contributed <= member_data.total_withdrawn {
+            return Err(AjoError::InsufficientFunds);
+        }
+
+        let refund = member_data.total_contributed - member_data.total_withdrawn;
+        
+        member_data.total_withdrawn += refund;
+        members.set(member.clone(), member_data);
+        env.storage().instance().set(&DataKey::Members, &members);
+
+        let token_client = token::Client::new(&env, &circle.token_address);
+        token_client.transfer(&env.current_contract_address(), &member, &refund);
+
+        env.events().publish(
+            (symbol_short!("withdraw"), member.clone(), env.current_contract_address()),
+            (refund, circle.current_round)
+        );
+
+        Ok(refund)
+    }
+
     // ---------------- ADMIN ----------------
 
     pub fn panic(env: Env, admin: Address) -> Result<(), AjoError> {
         Self::require_admin(&env, &admin)?;
-        env.storage().instance().set(&DataKey::CircleStatus, &true);
+        env.storage().instance().set(&DataKey::CircleStatus, &CircleStatus::Panicked);
         env.events().publish(
             ((symbol_short!("panic"),), admin.clone()),
             env.ledger().timestamp(),
@@ -407,7 +641,11 @@ impl AjoCircle {
 
     pub fn resume(env: Env, admin: Address) -> Result<(), AjoError> {
         Self::require_admin(&env, &admin)?;
-        env.storage().instance().set(&DataKey::CircleStatus, &false);
+        env.storage().instance().set(&DataKey::CircleStatus, &CircleStatus::Active);
+        env.events().publish(
+            (symbol_short!("resume"), admin.clone(), env.current_contract_address()),
+            env.ledger().timestamp()
+        );
         Ok(())
     }
 
@@ -421,7 +659,7 @@ impl AjoCircle {
 
     pub fn emergency_panic(env: Env, caller: Address) -> Result<(), AjoError> {
         Self::require_deployer(&env, &caller)?;
-        env.storage().instance().set(&DataKey::CircleStatus, &true);
+        env.storage().instance().set(&DataKey::CircleStatus, &CircleStatus::Panicked);
         env.events().publish(
             (symbol_short!("panic"),),
             (caller, env.ledger().timestamp()),
@@ -471,7 +709,6 @@ impl AjoCircle {
     pub fn revoke_role(env: Env, caller: Address, role: Symbol, member: Address) -> Result<(), AjoError> {
         Self::require_deployer(&env, &caller)?;
 
-        // Deployer's own ADMIN role cannot be revoked
         if let Some(deployer) = env.storage().instance().get::<DataKey, Address>(&DataKey::Deployer) {
             if deployer == member && role == ADMIN_ROLE {
                 return Err(AjoError::Unauthorized);
@@ -503,7 +740,7 @@ impl AjoCircle {
             env.storage().instance().set(&DataKey::RoleMembers, &role_members);
 
             env.events().publish(
-                (symbol_short!("role_rvk"), member),
+                (symbol_short!("role_rvk"), member, env.current_contract_address()),
                 (role, env.ledger().timestamp()),
             );
         }
@@ -511,7 +748,6 @@ impl AjoCircle {
         Ok(())
     }
 
-    /// Public role check (takes Env by value for contractimpl compatibility).
     pub fn has_role(env: Env, role: Symbol, member: Address) -> bool {
         Self::has_role_internal(&env, role, &member)
     }
@@ -537,7 +773,6 @@ impl AjoCircle {
         env.storage().instance().get(&DataKey::Circle).ok_or(AjoError::NotFound)
     }
 
-    /// Get current fee configuration
     pub fn get_fee_config(env: Env) -> Option<FeeConfig> {
         env.storage().instance().get(&DataKey::FeeConfig)
     }

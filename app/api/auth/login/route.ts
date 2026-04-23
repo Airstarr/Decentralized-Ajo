@@ -16,8 +16,13 @@ import { createChildLogger } from '@/lib/logger';
 const logger = createChildLogger({ service: 'api', route: '/api/auth/login' });
 
 export async function POST(request: NextRequest) {
-  const rateLimited = applyRateLimit(request, RATE_LIMITS.auth, 'auth:login');
-  if (rateLimited) return rateLimited;
+  // 1. Rate Limiting
+  const rateLimitResponse = await applyRateLimit(
+    request,
+    RATE_LIMITS.auth,
+    'auth-login',
+  );
+  if (rateLimitResponse) return rateLimitResponse;
 
   const { data, error } = await validateBody(request, LoginSchema);
   if (error) return error;

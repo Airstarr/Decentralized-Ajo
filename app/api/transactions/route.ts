@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
   const payload = verifyToken(token);
   if (!payload) return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
 
-  const rateLimited = applyRateLimit(request, RATE_LIMITS.api, 'transactions:list', payload.userId);
+  const rateLimited = await applyRateLimit(request, RATE_LIMITS.api, 'transactions:list', payload.userId);
   if (rateLimited) return rateLimited;
 
   const { searchParams } = new URL(request.url);

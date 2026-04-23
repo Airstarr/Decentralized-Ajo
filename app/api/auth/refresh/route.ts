@@ -14,7 +14,8 @@ import { createChildLogger } from '@/lib/logger';
 const logger = createChildLogger({ service: 'api', route: '/api/auth/refresh' });
 
 export async function POST(request: NextRequest) {
-  const rateLimited = applyRateLimit(request, RATE_LIMITS.auth, 'auth:refresh');
+  // 1. Rate Limiting
+  const rateLimited = await applyRateLimit(request, RATE_LIMITS.auth, 'auth:refresh');
   if (rateLimited) return rateLimited;
 
   const currentRefreshToken = request.cookies.get(REFRESH_TOKEN_COOKIE_NAME)?.value;

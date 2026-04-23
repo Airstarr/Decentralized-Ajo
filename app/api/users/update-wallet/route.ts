@@ -16,7 +16,7 @@ export async function PATCH(request: NextRequest) {
   const payload = verifyToken(token);
   if (!payload) return NextResponse.json({ error: 'Invalid or expired token' }, { status: 401 });
 
-  const rateLimited = applyRateLimit(request, RATE_LIMITS.api, 'users:update-wallet', payload.userId);
+  const rateLimited = await applyRateLimit(request, RATE_LIMITS.api, 'users:update-wallet', payload.userId);
   if (rateLimited) return rateLimited;
 
   const { data, error } = await validateBody(request, UpdateWalletSchema);

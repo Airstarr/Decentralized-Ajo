@@ -54,13 +54,15 @@ export async function validateBody<T>(
 /**
  * Apply rate limiting to a request.
  * Returns a 429 NextResponse when the limit is exceeded, otherwise null.
+ *
+ * NOTE: This is now asynchronous.
  */
-export function applyRateLimit(
+export async function applyRateLimit(
   request: NextRequest,
   config: RateLimitConfig,
   prefix: string,
   userId?: string,
-): NextResponse | null {
+): Promise<NextResponse | null> {
   const ip =
     request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
     request.headers.get('x-real-ip') ??
@@ -68,7 +70,7 @@ export function applyRateLimit(
 
   const identifier = userId ?? ip;
   const key = getRateLimitKey(prefix, identifier);
-  const limited = checkRateLimit(key, config);
+  const limited = await checkRateLimit(key, config);
 
   if (limited) {
     const res = NextResponse.json(

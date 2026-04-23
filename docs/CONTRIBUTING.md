@@ -214,7 +214,7 @@ Decentralized-Ajo/
 2. Add a `route.ts` file with exported `GET`, `POST`, `PATCH`, or `DELETE` functions.
 3. Use `extractToken` and `verifyToken` from `lib/auth.ts` for authentication.
 4. Use `validateBody` from `lib/api-helpers.ts` with a Zod schema for request validation.
-5. Use `applyRateLimit` from `lib/api-helpers.ts` to apply rate limiting.
+5. Use `await applyRateLimit` from `lib/api-helpers.ts` to apply rate limiting.
 
 Example skeleton:
 
@@ -234,7 +234,7 @@ export async function POST(request: NextRequest) {
   const payload = verifyToken(token);
   if (!payload) return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
 
-  const rateLimited = applyRateLimit(request, RATE_LIMITS.api, 'my-route', payload.userId);
+  const rateLimited = await applyRateLimit(request, RATE_LIMITS.api, 'my-route', payload.userId);
   if (rateLimited) return rateLimited;
 
   const { data, error } = await validateBody(request, MySchema);

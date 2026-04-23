@@ -98,6 +98,45 @@ shuffle_rotation(organizer: Address)
 ```rust
 claim_payout(member: Address)
 ```
+
+## Security & Invariants
+
+### Core Invariants
+The following invariants must hold true at all times to ensure fund safety and protocol integrity:
+
+1.  **Fund Safety (Solvency)**: The contract's actual token balance must always be greater than or equal to the tracked `TotalPool` value.
+2.  **Auth Boundary**: Every state-changing operation (deposits, payouts, admin actions) must require explicit `require_auth` from the relevant actor.
+3.  **Single Payout per Round**: A member can receive at most one payout per circle round. The `has_received_payout` flag must be set to `true` *before* any token transfer (CEI pattern).
+4.  **Rotation Integrity**: If a rotation order is set, payouts must only be claimable by the member whose turn it is in the current round.
+5.  **Disqualification**: Members with $\ge 3$ consecutive missed contributions are disqualified. Disqualified members cannot contribute or receive payouts until their standing is manually reset by an admin or a successful deposit.
+6.  **Pause Safety**: All user-facing state-changing operations (except `resume`) are disabled when the contract is in a `Panicked` or `Paused` state.
+7.  **Arithmetic Safety**: All numeric operations (pool tracking, contribution accumulation) must use checked arithmetic to prevent overflow or underflow.
+
+### Threat Model Mitigations
+- **Asset Theft**: Mitigated by strict `require_auth` and CEI pattern in `claim_payout`.
+- **Unauthorized Actions**: Mitigated by Role-Based Access Control (RBAC) with `Admin` and `Deployer` roles.
+- **Double Spending**: Mitigated by `has_received_payout` state tracking.
+- **Reentrancy**: Mitigated by Soroban's execution model and adherence to the Checks-Effects-Interactions pattern.
+
+## Event Schema
+
+The contract emits structured events for off-chain tracking and indexing. All events include the `Circle ID` (contract address) as a topic.
+
+| Event Topic | Indexed Parameters | Data Payload | Description |
+|-------------|-------------------|--------------|-------------|
+| `deposit` | `member`, `circle_id` | `(amount, round)` | Contribution received via `deposit` |
+| `contrib` | `member`, `circle_id` | `(amount, round)` | Contribution received via `contribute` |
+| `round_adv` | `circle_id` | `(new_round, deadline)` | Round advanced after all members contributed |
+| `withdraw` | `member`, `circle_id` | `(amount, round)` | Payout, refund, or partial withdrawal sent |
+| `vote_cast` | `member`, `circle_id` | `(choice, votes_for)` | Member cast a vote for dissolution |
+| `dissolve` | `action`, `circle_id` | `(data, timestamp)` | Dissolution state change (`start`, `passed`) |
+| `created` | `organizer`, `circle_id` | `(params...)` | Circle initialized |
+| `join` | `member`, `circle_id` | `member_count` | New member joined |
+| `panic` / `resume` | `admin`, `circle_id` | `timestamp` | Circle emergency state change |
+
+### Integration Note
+Indexers should filter by `circle_id` and the event name symbol to track specific circle activities. Member addresses are indexed for easy filtering of user-specific transaction history.
+
 - Enforces rotation order
 - Payout = `member_count × contribution_amount`
 - One-time payout per member
