@@ -1,21 +1,21 @@
 'use client';
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAccount } from 'wagmi';
-import { PlusCircle, Search } from 'lucide-react';
-
-import { Dashboard } from '@/components/dashboard';
-import DashboardCard from '@/components/DashboardCard';
-import DashboardSkeleton from '@/components/dashboard-skeleton';
-<<<<<<< feat/318
-import { NoUserAjosEmpty } from '@/components/ui/empty-states';
-=======
-import { CircleList } from '@/components/dashboard/circle-list';
-import { DashboardStats } from '@/components/dashboard/dashboard-stats';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
->>>>>>> main
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { PlusCircle, Search } from 'lucide-react';
+import { authenticatedFetch } from '@/lib/auth-client';
+import { useWallet } from '@/lib/wallet-context';
+import { Dashboard } from '@/components/dashboard';
+import { DashboardStats } from '@/components/dashboard/dashboard-stats';
+import { DashboardStatsSkeleton } from '@/components/dashboard/stats-skeleton';
+import { CircleList } from '@/components/dashboard/circle-list';
+import DashboardCard from '@/components/DashboardCard';
+import DashboardSkeleton from '@/components/dashboard-skeleton';
 import {
   Pagination,
   PaginationContent,
@@ -25,8 +25,6 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from '@/components/ui/pagination';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { authenticatedFetch } from '@/lib/auth-client';
 
 const PAGE_SIZE = 9;
 
@@ -46,6 +44,12 @@ interface AjoGroup {
   name: string;
   balance: string | number;
   nextCycle: string;
+  maxRounds: number;
+  currentRound: number;
+  status: string;
+  createdAt: string;
+  members: { userId: string }[];
+  contributions: { amount: number }[];
 }
 
 interface UserAjo {
@@ -60,38 +64,35 @@ interface UserAjo {
 }
 
 export default function DashboardPage() {
+  const router = useRouter();
   const { address, isConnected } = useAccount();
-<<<<<<< feat/318
-  useWallet(); // ensures wallet context is available for child components
-=======
->>>>>>> main
+  const { isConnected: walletConnected } = useWallet();
 
   const [circles, setCircles] = useState<Circle[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeGroups, setActiveGroups] = useState<AjoGroup[]>([]);
   const [userAjos, setUserAjos] = useState<UserAjo[]>([]);
   const [ajosLoading, setAjosLoading] = useState(false);
+
+  // Filter and Sort State
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [durationFilter, setDurationFilter] = useState('ALL');
+  const [sortBy, setSortBy] = useState('newest');
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
 
   const fetchCircles = useCallback(async () => {
     try {
       setLoading(true);
-
       const params = new URLSearchParams({
         page: currentPage.toString(),
         limit: PAGE_SIZE.toString(),
+        status: statusFilter,
+        duration: durationFilter,
+        sortBy,
+        search: searchQuery,
       });
-
-      if (statusFilter !== 'ALL') {
-        params.set('status', statusFilter);
-      }
-
-      if (searchQuery) {
-        params.set('search', searchQuery);
-      }
 
       const response = await authenticatedFetch(`/api/circles?${params.toString()}`);
       if (!response.ok) {
@@ -99,16 +100,15 @@ export default function DashboardPage() {
       }
 
       const data = await response.json();
-      const nextCircles: Circle[] = data.data || [];
-
-      setCircles(nextCircles);
+      setCircles(data.data || []);
       setTotalPages(data.meta?.pages || 1);
 
-<<<<<<< feat/318
       // Filter active circles for dashboard overview
       const activeCircles = data.data?.filter((circle: Circle) => circle.status === 'ACTIVE') || [];
       const activeGroupsData: AjoGroup[] = activeCircles.slice(0, 3).map((circle: Circle) => {
+        // Calculate balance from contributions
         const totalBalance = circle.contributions?.reduce((sum, contrib) => sum + contrib.amount, 0) || 0;
+        // Mock next cycle for now
         const nextCycle = 'Next payout in 5 days';
 
         return {
@@ -119,93 +119,48 @@ export default function DashboardPage() {
         };
       });
       setActiveGroups(activeGroupsData);
-=======
-      const activeCircles = nextCircles.filter(
-        (circle) => circle.status?.toUpperCase() === 'ACTIVE',
-      );
-
-      setActiveGroups(
-        activeCircles.slice(0, 4).map((circle) => {
-          const totalBalance =
-            circle.contributions?.reduce((sum, contribution) => {
-              return sum + contribution.amount;
-            }, 0) || 0;
-
-          return {
-            id: circle.id,
-            name: circle.name,
-            balance: `${totalBalance.toLocaleString()} XLM`,
-            nextCycle: `Every ${circle.contributionFrequencyDays} days`,
-          };
-        }),
-      );
->>>>>>> main
     } catch (error) {
       console.error('Error fetching circles:', error);
     } finally {
       setLoading(false);
     }
-  }, [currentPage, searchQuery, statusFilter]);
+  }, [currentPage, statusFilter, durationFilter, sortBy, searchQuery]);
 
   useEffect(() => {
     if (isConnected) {
       fetchCircles();
-      return;
+    } else {
+      setLoading(false);
     }
-
-    setLoading(false);
   }, [fetchCircles, isConnected]);
 
+  // Fetch user's Ajo groups when wallet is connected
   useEffect(() => {
-    if (!address || !isConnected) {
-      setUserAjos([]);
-      return;
+    if (address && isConnected) {
+      setAjosLoading(true);
+      fetch(`/api/user-ajos?address=${address}`)
+        .then(r => r.json())
+        .then(data => {
+          setUserAjos(data);
+          setAjosLoading(false);
+        })
+        .catch(err => {
+          console.error('Error fetching user ajos:', err);
+          setAjosLoading(false);
+        });
     }
-
-    setAjosLoading(true);
-    fetch(`/api/user-ajos?address=${address}`)
-      .then((response) => response.json())
-      .then((data) => {
-        setUserAjos(Array.isArray(data) ? data : []);
-      })
-      .catch((error) => {
-        console.error('Error fetching user ajos:', error);
-      })
-      .finally(() => {
-        setAjosLoading(false);
-      });
   }, [address, isConnected]);
 
-<<<<<<< feat/318
-  // Reset to page 1 when filters change
-=======
->>>>>>> main
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchQuery, statusFilter]);
-
-<<<<<<< feat/318
-  const handleClearFilters = useCallback(() => {
-    setSearchQuery('');
-    setStatusFilter('ALL');
-  }, []);
-
-=======
->>>>>>> main
   return (
     <main className="min-h-screen bg-background">
-      <Dashboard activeGroups={activeGroups} loading={loading && isConnected} />
+      {/* Use your new Dashboard component to handle Header + Wallet Check + Overview Cards */}
+      <Dashboard activeGroups={activeGroups} loading={loading} />
 
+      {/* User's Ajo Groups Section */}
       {isConnected && (
-        <div className="container mx-auto px-4 py-10">
-          <DashboardStats />
-        </div>
-      )}
-
-      {isConnected && (
-        <div className="container mx-auto px-4 pb-8">
-          <div className="mb-6 flex items-center justify-between">
-            <h2 className="text-3xl font-bold text-foreground">My Ajos</h2>
+        <div className="container mx-auto px-4 py-8">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-3xl font-bold">My Ajos</h2>
             <Button asChild>
               <Link href="/circles/create">
                 <PlusCircle className="mr-2 h-4 w-4" />
@@ -217,21 +172,17 @@ export default function DashboardPage() {
           {ajosLoading ? (
             <DashboardSkeleton />
           ) : userAjos.length === 0 ? (
-<<<<<<< feat/318
-            <NoUserAjosEmpty />
-=======
-            <div className="rounded-lg border-2 border-dashed p-12 text-center">
-              <p className="mb-4 text-muted-foreground">
-                You haven&apos;t joined any Ajo groups yet.
+            <div className="text-center py-12 border-2 border-dashed rounded-lg">
+              <p className="text-muted-foreground mb-4">
+                You haven't joined any Ajo groups yet
               </p>
               <Button asChild variant="outline">
                 <Link href="/circles/join">Browse Ajos</Link>
               </Button>
             </div>
->>>>>>> main
           ) : (
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {userAjos.map((ajo) => (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {userAjos.map(ajo => (
                 <DashboardCard key={ajo.id} ajo={ajo} />
               ))}
             </div>
@@ -239,116 +190,70 @@ export default function DashboardPage() {
         </div>
       )}
 
-<<<<<<< feat/318
-
-=======
       {!isConnected && (
         <div className="container mx-auto px-4 py-16">
-          <div className="rounded-lg border-2 border-dashed p-12 text-center">
-            <h3 className="mb-4 text-2xl font-bold text-foreground">
-              Connect Your Wallet
-            </h3>
-            <p className="text-muted-foreground">
-              Connect your wallet to view and manage your Ajo groups.
+          <div className="text-center p-12 border-2 border-dashed rounded-lg">
+            <h3 className="text-2xl font-bold mb-4">Connect Your Wallet</h3>
+            <p className="text-muted-foreground mb-6">
+              Connect your wallet to view and manage your Ajo groups
             </p>
           </div>
         </div>
       )}
->>>>>>> main
 
       <div className="container mx-auto px-4 py-12">
+        {/* Keeping Main's search and filtering logic below the overview */}
         <div className="space-y-6">
-          <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
-            <h2 className="text-2xl font-bold text-foreground">
-              Explore More Circles
-            </h2>
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <h2 className="text-2xl font-bold">Explore More Circles</h2>
 
-            <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center">
+            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
                 <Input
                   placeholder="Search circles..."
                   value={searchQuery}
-                  onChange={(event) => setSearchQuery(event.target.value)}
-                  className="w-full pl-10 sm:w-64"
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10 w-full sm:w-64"
                 />
               </div>
 
               <Tabs value={statusFilter} onValueChange={setStatusFilter}>
-                <TabsList className="border border-border/50 bg-card">
+                <TabsList>
                   <TabsTrigger value="ALL">All</TabsTrigger>
                   <TabsTrigger value="ACTIVE">Active</TabsTrigger>
-<<<<<<< feat/318
                   <TabsTrigger value="COMPLETED">Completed</TabsTrigger>
                 </TabsList>
               </Tabs>
-
-              <Button asChild>
-                <Link href="/circles/create">
-                  <PlusCircle className="mr-2 h-4 w-4" />
-                  New Circle
-                </Link>
-              </Button>
-=======
-                  <TabsTrigger value="PENDING">Pending</TabsTrigger>
-                  <TabsTrigger value="COMPLETED">Completed</TabsTrigger>
-                </TabsList>
-              </Tabs>
->>>>>>> main
             </div>
           </div>
 
-          <CircleList
-            circles={circles}
-            loading={loading}
-            searchQuery={searchQuery}
-            statusFilter={statusFilter}
-            onClearFilters={handleClearFilters}
-          />
+          <CircleList circles={circles} loading={loading} />
 
+          {/* Pagination */}
           {totalPages > 1 && (
-            <div className="flex justify-center">
+            <div className="flex justify-center mt-6">
               <Pagination>
                 <PaginationContent>
                   <PaginationItem>
                     <PaginationPrevious
                       href="#"
-                      onClick={(event) => {
-                        event.preventDefault();
-                        setCurrentPage((page) => Math.max(1, page - 1));
-                      }}
-                      aria-disabled={currentPage === 1}
-                      className={
-                        currentPage === 1 ? 'pointer-events-none opacity-50' : ''
-                      }
+                      onClick={(e) => { e.preventDefault(); setCurrentPage(Math.max(1, currentPage - 1)); }}
+                      className={currentPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
                     />
                   </PaginationItem>
 
-<<<<<<< feat/318
                   {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                    const p = i + 1;
-=======
-                  {Array.from({ length: Math.min(totalPages, 5) }, (_, index) => {
-                    const page = index + 1;
-
->>>>>>> main
+                    const page = i + 1;
                     return (
-                      <PaginationItem key={p}>
+                      <PaginationItem key={page}>
                         <PaginationLink
-<<<<<<< feat/318
-                          onClick={() => setCurrentPage(p)}
-                          isActive={p === currentPage}
-                          className="cursor-pointer"
-=======
                           href="#"
+                          onClick={(e) => { e.preventDefault(); setCurrentPage(page); }}
                           isActive={currentPage === page}
-                          onClick={(event) => {
-                            event.preventDefault();
-                            setCurrentPage(page);
-                          }}
->>>>>>> main
+                          className="cursor-pointer"
                         >
-                          {p}
+                          {page}
                         </PaginationLink>
                       </PaginationItem>
                     );
@@ -363,16 +268,8 @@ export default function DashboardPage() {
                   <PaginationItem>
                     <PaginationNext
                       href="#"
-                      onClick={(event) => {
-                        event.preventDefault();
-                        setCurrentPage((page) => Math.min(totalPages, page + 1));
-                      }}
-                      aria-disabled={currentPage === totalPages}
-                      className={
-                        currentPage === totalPages
-                          ? 'pointer-events-none opacity-50'
-                          : ''
-                      }
+                      onClick={(e) => { e.preventDefault(); setCurrentPage(Math.min(totalPages, currentPage + 1)); }}
+                      className={currentPage === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
                     />
                   </PaginationItem>
                 </PaginationContent>
