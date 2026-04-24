@@ -3,15 +3,16 @@ pragma solidity ^0.8.20;
 
 import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 
 /**
  * @title Ajo
  * @dev A simple rotating savings and credit association (ROSCA) contract.
- * Includes a pause mechanism for emergency situations.
+ * Includes a pause mechanism for emergency situations and reentrancy protection.
  */
-contract Ajo is Initializable, Pausable, AccessControl {
+contract Ajo is Initializable, Pausable, ReentrancyGuard, AccessControl {
     AggregatorV3Interface internal ethUsdPriceFeed;
     
     address private constant SEPOLIA_ETH_USD_FEED = 0x694AA1769357215DE4FAC081bf1f309aDC325306;
@@ -130,8 +131,9 @@ contract Ajo is Initializable, Pausable, AccessControl {
      * @notice Allows a member to deposit the required contribution amount.
      * @dev Enforces strict deposit of contributionAmountEth and updates pool state.
      * Can only be called when the contract is not paused.
+     * Protected against reentrancy attacks.
      */
-    function deposit() external payable whenNotPaused {
+    function deposit() external payable whenNotPaused nonReentrant {
         if(msg.value != contributionAmountEth) revert InvalidContribution();
         if(members.length >= maxMembers) revert AjoIsFull();
 
@@ -170,5 +172,33 @@ contract Ajo is Initializable, Pausable, AccessControl {
     /// @notice Get member count
     function memberCount() external view returns (uint256) {
         return members.length;
+    }
+
+    /**
+     * @notice Withdraw funds from the pool (admin only for emergency or authorized withdrawals)
+     * @dev Implements Checks-Effects-Interactions pattern to prevent reentrancy
+     * @param recipient Address to receive the funds
+     * @param amount Amount to withdraw in wei
+     */
+    function withdraw(address payable recipient, uint256 amount) 
+        external 
+        onlyRole(DEFAULT_ADMIN_ROLE) 
+        nonReentrant 
+        whenNotPaused 
+    {
+        // ── CHECKS ──────────────────────────────────────────────────────────
+        require(recipient != address(0), "Invalid recipient");
+        require(amount > 0, "Amount must be greater than 0");
+        require(amount <= totalPool, "Insufficient pool balance");
+        require(amount <= address(this).balance, "Insufficient contract balance");
+
+        // ── EFFECTS ─────────────────────────────────────────────────────────
+        // Update state BEFORE external call
+        totalPool -= amount;
+
+        // ── INTERACTIONS ────────────────────────────────────────────────────
+        // External call comes LAST
+        (bool success, ) = recipient.call{value: amount}("");
+        require(success, "ETH transfer failed");
     }
 }
