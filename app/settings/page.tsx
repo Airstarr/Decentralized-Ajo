@@ -6,7 +6,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Loader2, User, Mail, ShieldCheck, ArrowLeft } from 'lucide-react';
-import toast, { Toaster } from 'react-hot-toast';
+import toast from 'react-hot-toast';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -17,10 +17,10 @@ import Link from 'next/link';
 // Profile Schema defined based on requirements
 const profileSchema = z.object({
   username: z.string()
+    .trim()
     .min(3, 'Username must be at least 3 characters')
-    .max(30, 'Username must be 30 characters or less')
-    .regex(/^[a-zA-Z0-9]+$/, 'Username must be alphanumeric only (no spaces or special characters)'),
-  email: z.string().email('Please enter a valid email address'),
+    .max(30, 'Username must be 30 characters or less'),
+  email: z.string().trim().email('Please enter a valid email address'),
 });
 
 type ProfileFormValues = z.infer<typeof profileSchema>;
@@ -96,12 +96,11 @@ export default function SettingsPortal() {
 
       if (!response.ok) {
         // Handle specific validation/server errors
-        const errorMessage = result.error || 'Update failed';
-        toast.error(errorMessage);
+        toast.error("Update failed - Bad Request.");
         return;
       }
 
-      toast.success('Profile updated successfully!');
+      toast.success("Profile updated!");
       
       // Update local storage if necessary
       const storedUser = localStorage.getItem('user');
@@ -131,9 +130,6 @@ export default function SettingsPortal() {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 px-4 py-12 md:px-6 lg:px-8">
-      {/* react-hot-toast Toaster configuration */}
-      <Toaster position="top-right" reverseOrder={false} />
-      
       <div className="mx-auto max-w-2xl space-y-8">
         <div className="flex items-center justify-between">
           <div className="space-y-1">

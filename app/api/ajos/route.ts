@@ -46,6 +46,19 @@ export async function POST(request: NextRequest) {
   if (!payload) return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
 
   try {
+    // Check if user is verified
+    const user = await prisma.user.findUnique({
+      where: { id: payload.userId },
+      select: { emailVerifiedAt: true },
+    });
+
+    if (!user?.emailVerifiedAt) {
+      return NextResponse.json(
+        { error: 'Email verification required to create a circle' },
+        { status: 403 }
+      );
+    }
+
     const body = await request.json();
     const { name, description, txHash } = CreateAjoSchema.parse(body);
 
@@ -72,7 +85,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true, ajo: newAjo }, { status: 201 });
     
-  } catch (error) {
+  } catch (error: any) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: error.errors }, { status: 400 });
     }

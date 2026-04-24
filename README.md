@@ -9,6 +9,7 @@ A full-stack decentralized savings circle application built on the Stellar Netwo
 - [Technology Stack](#technology-stack)
 - [Project Structure](#project-structure)
 - [Setup Instructions](#setup-instructions)
+- [Component Documentation](#component-documentation)
 - [API Documentation](#api-documentation)
 - [Smart Contract](#smart-contract)
 - [Deployment](#deployment)
@@ -200,6 +201,78 @@ pnpm dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) to view the app.
+
+## Component Documentation
+
+### Live Component Showcase
+
+A live component showcase is available at [`/components-showcase`](http://localhost:3000/components-showcase). This page displays all critical UI components with various states and configurations without requiring additional setup.
+
+**Features:**
+- Three critical components documented: `AmountInput`, `ProposalCard`, `ErrorFallback`
+- Interactive examples with real-time state changes
+- Component prop documentation
+- Multiple use cases per component (default, error states, edge cases, etc.)
+
+**Access it:**
+```bash
+# Start the dev server
+pnpm dev
+
+# Visit in browser
+http://localhost:3000/components-showcase
+```
+
+### Storybook Integration (Optional)
+
+For an interactive component explorer with hot reload and automated documentation, you can set up Storybook:
+
+**Install Storybook (one-time setup):**
+```bash
+npm install -D --legacy-peer-deps storybook @storybook/react @storybook/nextjs
+```
+
+**Run Storybook:**
+```bash
+npm run storybook
+```
+
+Storybook will open at [`http://localhost:6006`](http://localhost:6006) with all component stories pre-configured.
+
+### Component Stories
+
+Component stories are defined in `components/__stories__/`:
+
+- **AmountInput.stories.tsx** - Cryptocurrency amount input with balance validation
+  - Default XLM input
+  - USDC variant
+  - Low balance scenarios
+  - Disabled state
+  - Exceeds balance error state
+  - Scientific notation handling
+
+- **ProposalCard.stories.tsx** - Governance proposal voting card
+  - Active proposals ready for voting
+  - Passed/Rejected proposal states
+  - User already voted state
+  - Wallet disconnected scenarios
+  - Quorum not met states
+  - Different proposal types (emergency payout, member removal, etc.)
+
+- **ErrorFallback.stories.tsx** - Error boundary fallback component
+  - Generic errors
+  - Network and API errors
+  - Timeout scenarios
+  - Validation errors
+  - Long error messages
+
+### Component Locations
+
+| Component | Location | Purpose |
+|-----------|----------|---------|
+| `AmountInput` | `components/ui/amount-input.tsx` | Cryptocurrency amount input with decimal validation |
+| `ProposalCard` | `components/governance/proposal-card.tsx` | Governance proposal display and voting interface |
+| `ErrorFallback` | `components/error-fallback.tsx` | Error boundary fallback for graceful error handling |
 
 ## API Documentation
 

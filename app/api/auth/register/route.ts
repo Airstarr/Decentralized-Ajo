@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import crypto from 'crypto';
+import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import {
   hashPassword,
@@ -13,6 +15,7 @@ import { validateBody, applyRateLimit } from '@/lib/api-helpers';
 import { RegisterSchema } from '@/lib/validations/auth';
 import { RATE_LIMITS } from '@/lib/rate-limit';
 import { createChildLogger } from '@/lib/logger';
+import { sendVerificationEmail } from '@/lib/email';
 
 const logger = createChildLogger({ service: 'api', route: '/api/auth/register' });
 
@@ -23,8 +26,10 @@ export async function POST(request: NextRequest) {
   const { data, error } = await validateBody(request, RegisterSchema);
   if (error) return error;
 
+  const registerData = data as z.infer<typeof RegisterSchema>;
+
   try {
-    const { email, password, firstName, lastName } = data;
+    const { email, password, firstName, lastName } = registerData;
 
     const passwordValidation = validatePasswordStrength(password);
     if (!passwordValidation.isValid) {
@@ -44,27 +49,47 @@ export async function POST(request: NextRequest) {
 
     const hashedPassword = await hashPassword(password);
 
-    const user = await prisma.user.create({
-      data: {
-        email: email.toLowerCase(),
-        password: hashedPassword,
-        firstName,
-        lastName,
-      },
-      select: {
-        id: true,
-        email: true,
-        firstName: true,
-        lastName: true,
-        walletAddress: true,
-        createdAt: true,
-      },
+    const user = await prisma.$transaction(async (tx: any) => {
+      const newUser = await tx.user.create({
+        data: {
+          email: email.toLowerCase(),
+          password: hashedPassword,
+          firstName,
+          lastName,
+        },
+        select: {
+          id: true,
+          email: true,
+          firstName: true,
+          lastName: true,
+          walletAddress: true,
+          createdAt: true,
+        },
+      });
+
+      const verificationToken = crypto.randomBytes(32).toString('hex');
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+
+      await tx.verificationToken.create({
+        data: {
+          token: verificationToken,
+          userId: newUser.id,
+          expiresAt,
+        },
+      });
+
+      return { newUser, verificationToken };
     });
 
-    const token = generateToken({ userId: user.id, email: user.email });
-    const refreshToken = await generateRefreshToken(user.id);
+    // Send verification email asynchronously
+    sendVerificationEmail(user.newUser.email, user.verificationToken).catch((err) => {
+      logger.error('Failed to send verification email during registration', { err, userId: user.newUser.id });
+    });
 
-    const response = NextResponse.json({ success: true, user, token }, { status: 201 });
+    const token = generateToken({ userId: user.newUser.id, email: user.newUser.email });
+    const refreshToken = await generateRefreshToken(user.newUser.id);
+
+    const response = NextResponse.json({ success: true, user: user.newUser, token }, { status: 201 });
     response.cookies.set({
       name: REFRESH_TOKEN_COOKIE_NAME,
       value: refreshToken,

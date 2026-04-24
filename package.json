@@ -21,7 +21,9 @@
     "test:contracts": "cd contracts/ajo-circle && cargo test --lib",
     "deploy:sepolia": "hardhat run contracts/ethereum/scripts/deploy.js --network sepolia",
     "verify:sepolia": "hardhat run scripts/verify.ts --network sepolia",
-    "deploy:verify:sepolia": "npm run deploy:sepolia && npm run verify:sepolia"
+    "deploy:verify:sepolia": "npm run deploy:sepolia && npm run verify:sepolia",
+    "storybook": "storybook dev -p 6006",
+    "build:storybook": "storybook build"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",
@@ -124,6 +126,7 @@
     "@types/react-dom": "19.2.3",
     "concurrently": "^9.1.2",
     "dotenv": "^17.3.1",
+    "fast-check": "^4.7.0",
     "hardhat": "^3.2.0",
     "identity-obj-proxy": "^3.0.0",
     "jest": "^30.3.0",
